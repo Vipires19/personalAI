@@ -116,9 +116,9 @@ def app_principal():
             if comparative_video_bytes:
                 st.header("🎬 Vídeo Comparativo:")
                 if os.path.exists(output_video_path_for_report):
-                #with open(output_video_path_for_report, "rb") as video_file:
-                    st.video(output_video_path_for_report)
-                    #st.video(video_file.read())
+                    with open(output_video_path_for_report, "rb") as video_file:
+                    #st.video(output_video_path_for_report)
+                        st.video(video_file.read())
                 else:
                     st.error("⚠️ Vídeo não encontrado no caminho esperado.")
     
