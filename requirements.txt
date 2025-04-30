@@ -5,5 +5,4 @@ opencv-contrib-python
 fpdf
 openai
 streamlit_authenticator
-urllib
 pymongo
