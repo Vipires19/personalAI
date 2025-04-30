@@ -56,8 +56,8 @@ def app_principal():
     student_name = st.text_input("Nome do aluno:", max_chars=50)
 
     # Uploads
-    ref_video = st.file_uploader("Vídeo de Referência", type=["mp4", "mov", "m4v", "avi", "webm"])
-    exec_video = st.file_uploader("Vídeo de Execução", type=["mp4", "mov", "m4v", "avi", "webm"])
+    ref_video = st.file_uploader("Vídeo de Referência", type=["mp4", "mov", "m4v", "avi", "webm", "qt"])
+    exec_video = st.file_uploader("Vídeo de Execução", type=["mp4", "mov", "m4v", "avi", "webm","qt"])
 
     if ref_video and exec_video and student_name:
         if st.button("🚀 Analisar"):
