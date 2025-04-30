@@ -33,9 +33,10 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
     target_height = 360
 
     fps = 30  # pode ser ajustado conforme a origem do vídeo
-
-    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-    temp_output_path = "temp_comparative_video.avi"
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    temp_output_path = "temp_comparative_video.mp4"
+    #fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+    #temp_output_path = "temp_comparative_video.avi"
     out = cv2.VideoWriter(temp_output_path, fourcc, fps, (target_width * 2, target_height))
 
     min_frames = max(len(frames_ref), len(frames_exec))
