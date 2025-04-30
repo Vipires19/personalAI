@@ -115,8 +115,13 @@ def app_principal():
             # Exibição do vídeo
             if comparative_video_bytes:
                 st.header("🎬 Vídeo Comparativo:")
-                with open(output_video_path_for_report, "rb") as video_file:
-                    st.video(video_file.read())
+                if os.path.exists(output_video_path_for_report):
+                #with open(output_video_path_for_report, "rb") as video_file:
+                    st.video(output_video_path_for_report)
+                    #st.video(video_file.read())
+                else:
+                    st.error("⚠️ Vídeo não encontrado no caminho esperado.")
+    
 
                 #full_feedback = generate_feedback_via_openai(avg_errors, API_KEY)
                 st.subheader("📋 Feedback Inteligente")
