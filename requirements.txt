@@ -1,0 +1,9 @@
+streamlit
+mediapipe
+opencv-python
+opencv-contrib-python
+fpdf
+openai
+streamlit_authenticator
+urllib
+pymongo
