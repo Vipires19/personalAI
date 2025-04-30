@@ -11,7 +11,7 @@ def extract_landmarks_from_video(video_path):
     frames = []
     landmarks_list = []
 
-    with mp_pose.Pose(static_image_mode=False, model_complexity=2, enable_segmentation=False) as pose:
+    with mp_pose.Pose(static_image_mode=False, model_complexity=1, enable_segmentation=False) as pose:
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
