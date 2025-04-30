@@ -1,0 +1,31 @@
+# 🏋️ Comparador de Execuções - Personal AI
+
+Sistema inteligente de análise de vídeos de treino para personal trainers.  
+Compare a execução de movimentos de seus alunos com vídeos de referência e receba feedback técnico e motivacional gerado por inteligência artificial.
+
+---
+
+## 🚀 Funcionalidades principais
+
+✅ Comparação de vídeos com detecção de postura usando IA  
+✅ Geração automática de **feedback profissional com linguagem motivacional (via OpenAI)**  
+✅ Geração de relatório PDF com insights e vídeo anotado  
+✅ Acesso protegido por login (cada personal com seus próprios dados)  
+✅ Pronto para rodar via Streamlit Cloud
+
+---
+
+## 📦 Tecnologias utilizadas
+
+- [Streamlit](https://streamlit.io/) — Interface rápida e intuitiva
+- [MediaPipe](https://developers.google.com/mediapipe) — Detecção de pose corporal
+- [OpenCV](https://opencv.org/) — Processamento de vídeo
+- [OpenAI API](https://platform.openai.com/) — Geração de feedbacks inteligentes
+- [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) — Armazenamento dos usuários
+- [streamlit-authenticator](https://github.com/mkhorasani/streamlit-authenticator) — Sistema de login seguro
+
+---
+
+## 📁 Estrutura do projeto
+
+📦 personal_app/ ├── personal.py # App principal ├── createUser.py # Script para cadastrar novos usuários ├── utils/ │ ├── helpers.py # Geração de relatórios PDF │ └── openai_feedback.py # Integração com OpenAI ├── services/ │ ├── pose_extractor.py # Extração de landmarks com MediaPipe │ ├── pose_analyzer.py # Análise de ângulos e comparações │ └── video_generator.py # Geração de vídeo comparativo com anotações └── assets/ └── logo.jpg # Logo do app
