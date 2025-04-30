@@ -62,6 +62,12 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
 
     out.release()
 
+    if os.path.exists(temp_output_path):
+        print("Vídeo gerado com sucesso:", temp_output_path)
+        print("Tamanho do arquivo:", os.path.getsize(temp_output_path))
+    else:
+        print("⚠️ Arquivo de vídeo não encontrado!")
+
     # Lê o arquivo final para o Streamlit
     with open(temp_output_path, "rb") as f:
         video_bytes = f.read()
