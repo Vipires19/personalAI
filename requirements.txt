@@ -7,3 +7,4 @@ openai
 streamlit_authenticator
 pymongo
 moviepy
+imageio-ffmpeg
