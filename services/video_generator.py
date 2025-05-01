@@ -29,8 +29,8 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
     if len(frames_ref) == 0 or len(frames_exec) == 0:
         return None
 
-    target_width = 640
-    target_height = 360
+    target_width = 480   
+    target_height = 270
     min_frames = max(len(frames_ref), len(frames_exec))
     combined_frames = []
 
