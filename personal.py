@@ -10,7 +10,6 @@ import os
 from pymongo import MongoClient
 import urllib
 import urllib.parse
-from streamlit_user_agent import st_user_agent
 
 API_KEY = st.secrets['OPENAI_API_KEY']
 st.set_page_config(page_title="Comparador de Execuções - Personal", layout="wide")
@@ -115,17 +114,9 @@ def app_principal():
 
             if comparative_video_bytes:
                 st.header("🎬 Vídeo Comparativo:")
-                ua = st_user_agent()
-                is_mobile = ua.is_mobile
-
-                if is_mobile:
-                    st.warning("Seu dispositivo pode ter problemas para visualizar o vídeo. Recomendamos fazer o download.")
-                    st.download_button("📥 Baixar vídeo", data=comparative_video_bytes, file_name=f"{student_name}_comparativo.mp4")
-                else:
-                    st.video(comparative_video_bytes)
 
                 # Exibe o vídeo corretamente
-                #st.video(comparative_video_bytes)
+                st.video(comparative_video_bytes)
 
                 # Gera e exibe o feedback
                 st.subheader("📋 Feedback Inteligente")
