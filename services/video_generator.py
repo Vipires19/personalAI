@@ -4,6 +4,7 @@ import mediapipe as mp
 from mediapipe.framework.formats import landmark_pb2
 from moviepy.editor import ImageSequenceClip
 import os
+import streamlit as st
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -26,6 +27,13 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
 
     target_width = 360
     target_height = 202
+    max_frames = 150  # limite para evitar excesso de RAM no mobile
+
+    frames_ref = frames_ref[:max_frames]
+    frames_exec = frames_exec[:max_frames]
+    landmarks_ref = landmarks_ref[:max_frames]
+    landmarks_exec = landmarks_exec[:max_frames]
+
     min_frames = max(len(frames_ref), len(frames_exec))
     combined_frames = []
 
@@ -52,8 +60,19 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
     temp_output_path = "temp_comparative_video.mp4"
     clip.write_videofile(temp_output_path, codec="libx264", audio=False, bitrate="500k", logger=None)
 
-    with open(temp_output_path, "rb") as f:
-        video_bytes = f.read()
-
-    os.remove(temp_output_path)
-    return video_bytes
+    # É aqui que adiamos o carregamento até a interação
+    if st.session_state.get("is_mobile"):
+        if st.button("🔁 Gerar vídeo para download"):
+            with open(temp_output_path, "rb") as f:
+                video_bytes = f.read()
+            os.remove(temp_output_path)
+            st.download_button("📥 Baixar vídeo", data=video_bytes, file_name="comparativo.mp4")
+            return video_bytes
+        else:
+            os.remove(temp_output_path)
+            return None
+    else:
+        with open(temp_output_path, "rb") as f:
+            video_bytes = f.read()
+        os.remove(temp_output_path)
+        return video_bytes
