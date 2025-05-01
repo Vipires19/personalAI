@@ -5,7 +5,7 @@ import numpy as np
 import mediapipe as mp
 import os
 from mediapipe.framework.formats import landmark_pb2
-from moviepy.editor import ImageSequenceClip
+from moviepy import ImageSequenceClip
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
