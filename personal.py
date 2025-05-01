@@ -132,8 +132,8 @@ def app_principal():
                         st.download_button("📄 Baixar Relatório PDF", data=pdf_file.read(), file_name=f"{student_name}_relatorio.pdf")
                 else:
                     st.error("❌ O relatório não foi encontrado após a geração.")
-                else:
-                    st.error("❌ O vídeo comparativo não foi gerado corretamente.")
+            else:
+                st.error("❌ O vídeo comparativo não foi gerado corretamente.")
 
     else:
         st.info("Preencha o nome do aluno e envie os dois vídeos para começar.")
