@@ -6,3 +6,4 @@ fpdf
 openai
 streamlit_authenticator
 pymongo
+moviepy
