@@ -89,11 +89,20 @@ def app_principal():
             st.success("✅ Análise concluída!")
 
             if comparative_video_bytes:
-                st.header("🎮 Vídeo Comparativo:")
+                st.header("🎬 Vídeo Comparativo:")
+            
+                # Exibe o vídeo corretamente
                 st.video(comparative_video_bytes)
+            
+                # Gera e exibe o feedback
                 st.subheader("📋 Feedback Inteligente")
+                full_feedback = generate_feedback_via_openai(avg_errors, API_KEY)
                 st.write(full_feedback)
-
+            
+                # Gera o PDF
+                report_path = f"reports/{student_name}_relatorio.pdf"
+                generate_pdf_report(student_name, insights, avg_error, output_video_path_for_report, report_path, full_feedback=full_feedback)
+            
                 if os.path.exists(report_path):
                     with open(report_path, "rb") as pdf_file:
                         st.download_button("📄 Baixar Relatório PDF", data=pdf_file.read(), file_name=f"{student_name}_relatorio.pdf")
@@ -101,9 +110,7 @@ def app_principal():
                     st.error("❌ O relatório não foi encontrado após a geração.")
             else:
                 st.error("❌ O vídeo comparativo não foi gerado corretamente.")
-    else:
-        st.info("Preencha o nome do aluno e envie os dois vídeos para começar.")
-
+                
 def main():
     if st.session_state["authentication_status"]:
         app_principal()
