@@ -62,6 +62,10 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
     temp_output_path = "temp_comparative_video.mp4"
     clip.write_videofile(temp_output_path, codec="libx264", audio=False, bitrate="500k", logger=None)
 
+    # ⚠️ Verifica se o arquivo foi realmente criado
+    if not os.path.exists(temp_output_path):
+        raise FileNotFoundError("❌ Erro ao gerar o vídeo: arquivo temp_comparative_video.mp4 não foi criado.")
+
     with open(temp_output_path, "rb") as f:
         video_bytes = f.read()
 
