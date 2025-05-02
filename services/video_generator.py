@@ -5,7 +5,6 @@ import numpy as np
 import mediapipe as mp
 import os
 from mediapipe.framework.formats import landmark_pb2
-from moviepy.editor import ImageSequenceClip
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -24,22 +23,25 @@ def draw_landmarks_on_frame(frame, landmarks_list):
     return frame
 
 def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec):
+    """Gera vídeo comparativo lado a lado usando frames e landmarks extraídos."""
+
     if len(frames_ref) == 0 or len(frames_exec) == 0:
         return None
 
-    target_width = 360
-    target_height = 202
-    max_frames = 150
+    # Definindo resolução alvo
+    target_width = 640
+    target_height = 360
 
-    frames_ref = frames_ref[:max_frames]
-    frames_exec = frames_exec[:max_frames]
-    landmarks_ref = landmarks_ref[:max_frames]
-    landmarks_exec = landmarks_exec[:max_frames]
+    fps = 30  # pode ser ajustado conforme a origem do vídeo
+
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')  # Codec H.264
+    temp_output_path = "temp_comparative_video.mp4"
+    out = cv2.VideoWriter(temp_output_path, fourcc, fps, (target_width * 2, target_height))
 
     min_frames = max(len(frames_ref), len(frames_exec))
-    combined_frames = []
 
     for i in range(min_frames):
+        # Se acabou os frames, mantém o último frame
         frame_ref = frames_ref[i] if i < len(frames_ref) else frames_ref[-1]
         frame_exec = frames_exec[i] if i < len(frames_exec) else frames_exec[-1]
         landmark_ref = landmarks_ref[i] if i < len(landmarks_ref) else landmarks_ref[-1]
@@ -54,16 +56,15 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
         frame_ref = cv2.resize(frame_ref, (target_width, target_height))
         frame_exec = cv2.resize(frame_exec, (target_width, target_height))
 
-        combined = np.hstack((frame_ref, frame_exec))
-        combined_rgb = combined[..., ::-1]  # BGR → RGB
-        combined_frames.append(combined_rgb)
+        combined_frame = np.hstack((frame_ref, frame_exec))
+        out.write(combined_frame)
 
-    clip = ImageSequenceClip(combined_frames, fps=24)
-    temp_output_path = "temp_comparative_video.mp4"
-    clip.write_videofile(temp_output_path, codec="libx264", audio=False, bitrate="500k", logger=None)
 
+    out.release()
+
+    # Lê o arquivo final para o Streamlit
     with open(temp_output_path, "rb") as f:
         video_bytes = f.read()
 
-    os.remove(temp_output_path)
+    os.remove(temp_output_path)  # limpa o arquivo temporário
     return video_bytes
