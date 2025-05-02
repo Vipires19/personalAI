@@ -10,6 +10,7 @@ import os
 from pymongo import MongoClient
 import urllib
 import urllib.parse
+import streamlit.components.v1 as components
 
 API_KEY = st.secrets['OPENAI_API_KEY']
 st.set_page_config(page_title="Comparador de Execuções - Personal", layout="wide")
@@ -19,29 +20,39 @@ mongo_pass = st.secrets["MONGO_PASS"]
 
 username = urllib.parse.quote_plus(mongo_user)
 password = urllib.parse.quote_plus(mongo_pass)
-client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (username, password), ssl = True)
+client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (username, password), ssl=True)
 st.cache_resource = client
 db = client.personalAI
 coll = db.usuarios
 
-# --- Authentication ---
-# Load hashed passwords
+# --- Detectar dispositivo ---
+if "is_mobile" not in st.session_state:
+    components.html(
+        """
+        <script>
+        const isMobile = /android|iphone|ipad|mobile/i.test(navigator.userAgent);
+        window.parent.postMessage({ isMobile: isMobile }, "*");
+        </script>
+        """,
+        height=0
+    )
+    st.session_state["is_mobile"] = False
 
+# --- Authentication ---
 user = coll.find({})
 users = []
 for item in user:
     item.pop('_id', None)
     users.append(item)
 
-usuarios = {'usernames' : {}}
+usuarios = {'usernames': {}}
 for item in users:
-    usuarios['usernames'][item['username']] = {'name' : item['name'], 'password' : item['password'][0]}
-  
+    usuarios['usernames'][item['username']] = {'name': item['name'], 'password': item['password'][0]}
+
 credentials = usuarios
 
-authenticator = stauth.Authenticate(credentials= credentials, cookie_name= 'random_cookie_name', cookie_key='key123', cookie_expiry_days= 1)
+authenticator = stauth.Authenticate(credentials=credentials, cookie_name='random_cookie_name', cookie_key='key123', cookie_expiry_days=1)
 authenticator.login()
-
 
 def app_principal():
     st.title("🏋️ Sistema de Análise de Exercícios com IA")
@@ -49,83 +60,58 @@ def app_principal():
     st.header(f"Bem-vindo, {st.session_state['name']}")
     btn = authenticator.logout()
     if btn:
-        st.session_state["authentication_status"] == None
+        st.session_state["authentication_status"] = None
     st.write("Faça upload dos vídeos para comparar a execução do aluno com o modelo de referência.")
 
-    # Campo para nome do aluno
     student_name = st.text_input("Nome do aluno:", max_chars=50)
-
-    # Uploads
     ref_video = st.file_uploader("Vídeo de Referência", type=["mp4", "mov", "m4v", "avi", "webm", "qt"])
-    exec_video = st.file_uploader("Vídeo de Execução", type=["mp4", "mov", "m4v", "avi", "webm","qt"])
+    exec_video = st.file_uploader("Vídeo de Execução", type=["mp4", "mov", "m4v", "avi", "webm", "qt"])
 
     if ref_video and exec_video and student_name:
         if st.button("🚀 Analisar"):
             with st.spinner("Processando vídeos..."):
-                ref_temp = None
-                exec_temp = None
-                comparative_video_bytes = None
+                ref_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                exec_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                ref_temp.write(ref_video.read())
+                exec_temp.write(exec_video.read())
 
                 try:
-                    # Salva os uploads temporariamente
-                    ref_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-                    exec_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-                    ref_temp.write(ref_video.read())
-                    exec_temp.write(exec_video.read())
-
-                    # Extração de poses (para análise)
                     frames_ref, landmarks_ref = extract_landmarks_from_video(ref_temp.name)
                     frames_exec, landmarks_exec = extract_landmarks_from_video(exec_temp.name)
-                    
-                    # Análise dos movimentos
                     insights, avg_error, avg_errors = analyze_poses(landmarks_ref, landmarks_exec)
-
-                    # Gera vídeo comparativo COM anotações
                     comparative_video_bytes = generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec)
 
-                    # Gera relatório PDF
                     output_video_path_for_report = os.path.join("reports", f"{student_name}_comparativo.mp4")
                     if comparative_video_bytes:
                         os.makedirs("reports", exist_ok=True)
                         with open(output_video_path_for_report, "wb") as f:
                             f.write(comparative_video_bytes)
                         full_feedback = generate_feedback_via_openai(avg_errors, API_KEY)
-                        generate_pdf_report(student_name, insights, avg_error, output_video_path_for_report, f"reports/{student_name}_relatorio.pdf", full_feedback=full_feedback)
-
-                    else:
-                        st.error("Erro ao gerar o vídeo comparativo com anotações.")
+                        report_path = f"reports/{student_name}_relatorio.pdf"
+                        generate_pdf_report(student_name, insights, avg_error, output_video_path_for_report, report_path, full_feedback=full_feedback)
 
                 finally:
-                    # Limpeza dos arquivos temporários, garantindo que sejam fechados
-                    if ref_temp:
-                        ref_temp.close()
-                        try:
-                            os.unlink(ref_temp.name)
-                        except Exception as e:
-                            st.warning(f"Não foi possível remover o arquivo temporário de referência: {e}")
-                    if exec_temp:
-                        exec_temp.close()
-                        try:
-                            os.unlink(exec_temp.name)
-                        except Exception as e:
-                            st.warning(f"Não foi possível remover o arquivo temporário de execução: {e}")
+                    ref_temp.close()
+                    exec_temp.close()
+                    try:
+                        os.unlink(ref_temp.name)
+                        os.unlink(exec_temp.name)
+                    except:
+                        pass
 
             st.success("✅ Análise concluída!")
 
             if comparative_video_bytes:
                 st.header("🎬 Vídeo Comparativo:")
 
-                # Exibe o vídeo corretamente
-                st.video(comparative_video_bytes)
+                if st.session_state["is_mobile"]:
+                    if st.button("📥 Gerar botão para baixar vídeo"):
+                        st.download_button("📥 Baixar vídeo", data=comparative_video_bytes, file_name="comparativo.mp4")
+                else:
+                    st.video(comparative_video_bytes)
 
-                # Gera e exibe o feedback
                 st.subheader("📋 Feedback Inteligente")
-                full_feedback = generate_feedback_via_openai(avg_errors, API_KEY)
                 st.write(full_feedback)
-
-                # Gera o PDF
-                report_path = f"reports/{student_name}_relatorio.pdf"
-                generate_pdf_report(student_name, insights, avg_error, output_video_path_for_report, report_path, full_feedback=full_feedback)
 
                 if os.path.exists(report_path):
                     with open(report_path, "rb") as pdf_file:
@@ -134,18 +120,15 @@ def app_principal():
                     st.error("❌ O relatório não foi encontrado após a geração.")
             else:
                 st.error("❌ O vídeo comparativo não foi gerado corretamente.")
-
     else:
         st.info("Preencha o nome do aluno e envie os dois vídeos para começar.")
 
 def main():
     if st.session_state["authentication_status"]:
         app_principal()
-
     elif st.session_state["authentication_status"] == False:
         st.error("Username/password is incorrect")
-
-    elif st.session_state["authentication_status"] == None:
+    elif st.session_state["authentication_status"] is None:
         st.warning("Please enter your username and password")
 
 if __name__ == '__main__':
