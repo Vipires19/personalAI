@@ -36,6 +36,7 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
 
     fps = 30
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    temp_output_path = "temp_comparative_video.mp4"
     out = cv2.VideoWriter("temp_comparative_video.mp4", fourcc, fps, (target_width * 2, target_height))
 
     min_frames = max(len(frames_ref), len(frames_exec))
