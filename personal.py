@@ -1,3 +1,5 @@
+# Versão estável do app.py antes dos ajustes para mobile
+
 import streamlit as st
 import streamlit_authenticator as stauth
 from services.pose_extractor import extract_landmarks_from_video
@@ -8,9 +10,7 @@ from utils.openai_feedback import generate_feedback_via_openai
 import tempfile
 import os
 from pymongo import MongoClient
-import urllib
 import urllib.parse
-import streamlit.components.v1 as components
 
 API_KEY = st.secrets['OPENAI_API_KEY']
 st.set_page_config(page_title="Comparador de Execuções - Personal", layout="wide")
@@ -20,25 +20,11 @@ mongo_pass = st.secrets["MONGO_PASS"]
 
 username = urllib.parse.quote_plus(mongo_user)
 password = urllib.parse.quote_plus(mongo_pass)
-client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (username, password), ssl=True)
-st.cache_resource = client
+client = MongoClient(f"mongodb+srv://{username}:{password}@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0", ssl=True)
 db = client.personalAI
 coll = db.usuarios
 
-# --- Detectar dispositivo ---
-if "is_mobile" not in st.session_state:
-    components.html(
-        """
-        <script>
-        const isMobile = /android|iphone|ipad|mobile/i.test(navigator.userAgent);
-        window.parent.postMessage({ isMobile: isMobile }, "*");
-        </script>
-        """,
-        height=0
-    )
-    st.session_state["is_mobile"] = False
-
-# --- Authentication ---
+# --- Autenticação ---
 user = coll.find({})
 users = []
 for item in user:
@@ -61,6 +47,7 @@ def app_principal():
     btn = authenticator.logout()
     if btn:
         st.session_state["authentication_status"] = None
+
     st.write("Faça upload dos vídeos para comparar a execução do aluno com o modelo de referência.")
 
     student_name = st.text_input("Nome do aluno:", max_chars=50)
@@ -102,14 +89,8 @@ def app_principal():
             st.success("✅ Análise concluída!")
 
             if comparative_video_bytes:
-                st.header("🎬 Vídeo Comparativo:")
-
-                if st.session_state["is_mobile"]:
-                    if st.button("📥 Gerar botão para baixar vídeo"):
-                        st.download_button("📥 Baixar vídeo", data=comparative_video_bytes, file_name="comparativo.mp4")
-                else:
-                    st.video(comparative_video_bytes)
-
+                st.header("🎮 Vídeo Comparativo:")
+                st.video(comparative_video_bytes)
                 st.subheader("📋 Feedback Inteligente")
                 st.write(full_feedback)
 
