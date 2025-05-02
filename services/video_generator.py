@@ -60,9 +60,12 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
 
     clip = ImageSequenceClip(combined_frames, fps=24)
     temp_output_path = "temp_comparative_video.mp4"
-    clip.write_videofile(temp_output_path, codec="libx264", audio=False, bitrate="500k", logger=None)
 
-    # ⚠️ Verifica se o arquivo foi realmente criado
+    try:
+        clip.write_videofile(temp_output_path, codec="libx264", audio=False, bitrate="500k", logger=None)
+    except Exception as e:
+        raise RuntimeError(f"Erro ao gerar vídeo com moviepy: {e}")
+
     if not os.path.exists(temp_output_path):
         raise FileNotFoundError("❌ Erro ao gerar o vídeo: arquivo temp_comparative_video.mp4 não foi criado.")
 
