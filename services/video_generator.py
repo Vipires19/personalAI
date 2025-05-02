@@ -55,19 +55,12 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
         frame_exec = cv2.resize(frame_exec, (target_width, target_height))
 
         combined = np.hstack((frame_ref, frame_exec))
-        combined_rgb = combined[..., ::-1]
+        combined_rgb = combined[..., ::-1]  # BGR → RGB
         combined_frames.append(combined_rgb)
 
     clip = ImageSequenceClip(combined_frames, fps=24)
     temp_output_path = "temp_comparative_video.mp4"
-
-    try:
-        clip.write_videofile(temp_output_path, codec="libx264", audio=False, bitrate="500k", logger=None)
-    except Exception as e:
-        raise RuntimeError(f"Erro ao gerar vídeo com moviepy: {e}")
-
-    if not os.path.exists(temp_output_path):
-        raise FileNotFoundError("❌ Erro ao gerar o vídeo: arquivo temp_comparative_video.mp4 não foi criado.")
+    clip.write_videofile(temp_output_path, codec="libx264", audio=False, bitrate="500k", logger=None)
 
     with open(temp_output_path, "rb") as f:
         video_bytes = f.read()
