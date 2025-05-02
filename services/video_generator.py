@@ -67,7 +67,3 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
 
     os.remove(temp_output_path)
     return video_bytes
-
-
-    os.remove(temp_output_path)  # limpa o arquivo temporário
-    return video_bytes
