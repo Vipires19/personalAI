@@ -18,7 +18,7 @@ class PDF(FPDF):
         self.multi_cell(0, 10, body)
         self.ln()
 
-def generate_pdf_report(student_name, insights, avg_error, video_path, output_path, full_feedback=None):
+def generate_pdf_report(student_name, insights, avg_error, full_feedback=None):
     pdf = PDF()
     pdf.add_page()
 
@@ -33,4 +33,7 @@ def generate_pdf_report(student_name, insights, avg_error, video_path, output_pa
         pdf.chapter_title("Feedback Inteligente Personalizado:")
         pdf.chapter_body(full_feedback)
 
-    pdf.output(output_path)
+    # Gera PDF em memória
+    pdf_output = pdf.output(dest='S').encode('latin1')  # 'S' = string, latin1 é necessário
+    return pdf_output
+
