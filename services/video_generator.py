@@ -1,12 +1,14 @@
 import cv2
 import numpy as np
 import mediapipe as mp
-import io
+import os
 from mediapipe.framework.formats import landmark_pb2
 from moviepy.editor import ImageSequenceClip
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
+
+#R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME")
 
 def draw_landmarks_on_frame(frame, landmarks_list):
     if landmarks_list:
@@ -46,7 +48,18 @@ def generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks
         combined_frames.append(combined_rgb)
 
     clip = ImageSequenceClip(combined_frames, fps=30)
-    buffer = io.BytesIO()
-    clip.write_videofile(buffer, codec="libx264", audio=False, verbose=False, logger=None)
-    buffer.seek(0)
-    return buffer.read()
+    temp_output_path = "temp_comparative_video.mp4"
+    clip.write_videofile(temp_output_path, codec="libx264", audio=False, verbose=False, logger=None)
+
+    with open(temp_output_path, "rb") as f:
+        video_bytes = f.read()
+
+    os.remove(temp_output_path)
+    return video_bytes
+
+def save_and_upload_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec, upload_path, s3_client, bucket_name):
+    video_bytes = generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec)
+    if video_bytes:
+        s3_client.put_object(Bucket=bucket_name, Key=upload_path, Body=video_bytes, ContentType='video/mp4')
+        return f"https://{bucket_name}.r2.cloudflarestorage.com/{upload_path}"
+    return None
