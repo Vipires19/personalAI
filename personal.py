@@ -2,26 +2,27 @@ import streamlit as st
 import streamlit_authenticator as stauth
 from services.pose_extractor import extract_landmarks_from_video
 from services.pose_analyzer import analyze_poses
-from services.video_generator import generate_comparative_video
+from services.video_generator import save_and_upload_comparative_video
 from utils.helpers import generate_pdf_report
 from utils.openai_feedback import generate_feedback_via_openai
+from utils.r2_utils import get_r2_client
 import tempfile
 import os
 from pymongo import MongoClient
 import urllib.parse
 
-# --- Configuração Inicial ---
 API_KEY = st.secrets['OPENAI_API_KEY']
+R2_BUCKET = st.secrets['R2_BUCKET']
+R2_KEY = st.secrets['R2_KEY']
+R2_SECRET = st.secrets['R2_SECRET_KEY']
+R2_ENDPOINT = st.secrets['ENDPOINT_URL']
 
-# Lê diretamente da URL (novo API estável)
 layout = st.query_params.get("layout", "centered")
 if layout not in ["wide", "centered"]:
     layout = "centered"
 
-# Aplica layout antes de qualquer coisa
 st.set_page_config(page_title="Comparador de Execuções - Personal", layout=layout)
 
-# Sidebar para alternar layout
 with st.sidebar:
     st.write(f"Layout atual: **{layout.upper()}**")
     if layout == "centered":
@@ -36,10 +37,9 @@ with st.sidebar:
                 '<meta http-equiv="refresh" content="0; URL=/?layout=centered">',
                 unsafe_allow_html=True
             )
-            
-# --- Conexão com MongoDB ---
+
 mongo_user = st.secrets['MONGO_USER']
-mongo_pass = st.secrets["MONGO_PASS"]
+mongo_pass = st.secrets['MONGO_PASS']
 username = urllib.parse.quote_plus(mongo_user)
 password = urllib.parse.quote_plus(mongo_pass)
 
@@ -50,7 +50,6 @@ client = MongoClient(
 db = client.personalAI
 coll = db.usuarios
 
-# --- Autenticação ---
 user = coll.find({})
 users = [dict(item) for item in user]
 for item in users:
@@ -101,16 +100,15 @@ def app_principal():
                         frames_ref, landmarks_ref = extract_landmarks_from_video(ref_temp.name)
                         frames_exec, landmarks_exec = extract_landmarks_from_video(exec_temp.name)
                         insights, avg_error, avg_errors = analyze_poses(landmarks_ref, landmarks_exec)
-                        comparative_video_bytes = generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec)
 
-                        output_video_path_for_report = os.path.join("reports", f"{student_name}_comparativo.mp4")
-                        if comparative_video_bytes:
-                            os.makedirs("reports", exist_ok=True)
-                            with open(output_video_path_for_report, "wb") as f:
-                                f.write(comparative_video_bytes)
+                        s3_client = get_r2_client(R2_KEY, R2_SECRET, R2_ENDPOINT)
+                        upload_path = f"videos/{student_name}_comparativo.mp4"
+                        video_url = save_and_upload_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec, upload_path, s3_client, R2_BUCKET)
+
+                        if video_url:
                             full_feedback = generate_feedback_via_openai(avg_errors, API_KEY)
                             report_path = f"reports/{student_name}_relatorio.pdf"
-                            generate_pdf_report(student_name, insights, avg_error, output_video_path_for_report, report_path, full_feedback=full_feedback)
+                            generate_pdf_report(student_name, insights, avg_error, video_url, report_path, full_feedback=full_feedback)
                     finally:
                         ref_temp.close()
                         exec_temp.close()
@@ -122,10 +120,10 @@ def app_principal():
 
                 st.success("✅ Análise concluída!")
 
-                if comparative_video_bytes:
+                if video_url:
                     st.header("🎬 Vídeo Comparativo:")
-                    st.video(comparative_video_bytes)
-                    st.download_button("📥 Baixar Vídeo Comparativo", data=comparative_video_bytes, file_name=f"{student_name}_comparativo.mp4")
+                    st.video(video_url)
+                    st.markdown(f"[📥 Baixar Vídeo Comparativo]({video_url})", unsafe_allow_html=True)
 
                     st.subheader("📋 Feedback Inteligente")
                     with st.expander("📋 Ver Feedback Inteligente"):
