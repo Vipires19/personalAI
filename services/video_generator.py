@@ -61,5 +61,6 @@ def save_and_upload_comparative_video(frames_ref, landmarks_ref, frames_exec, la
     video_bytes = generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec)
     if video_bytes:
         s3_client.put_object(Bucket=bucket_name, Key=upload_path, Body=video_bytes, ContentType='video/mp4')
-        return f"https://{bucket_name}.r2.cloudflarestorage.com/{upload_path}"
+        # Retorna a URL pública no subdomínio r2.dev
+        return f"https://pub-2a7d5dc31ca74a60a5e98cdce4559250.r2.dev/{upload_path}"
     return None
