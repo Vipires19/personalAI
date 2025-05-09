@@ -104,9 +104,12 @@ def app():
                     "ref_path": ref_url,
                     "exec_path": exec_url
                 }
-                job_id = coll_jobs.insert_one(job_data).inserted_id
 
-                st.success("✅ Enviado para análise. Verifique abaixo o status.")
+                # Grava no MongoDB
+                result = coll_jobs.insert_one(job_data)
+                st.success(f"✅ Enviado para análise. ID do job: {result.inserted_id}")
+                #job_id = coll_jobs.insert_one(job_data).inserted_id
+                #st.success("✅ Enviado para análise. Verifique abaixo o status.")
 
     st.divider()
     st.subheader("📊 Minhas Análises")
