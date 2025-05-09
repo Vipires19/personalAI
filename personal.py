@@ -79,7 +79,6 @@ def app():
         exec_video = st.file_uploader("Vídeo de Execução", type=["mp4"])
 
     if ref_video and exec_video and student_name:
-        st.write("🧪 Dados que serão enviados:", job_data)
 
         if st.button("🚀 Enviar para Análise"):
             with st.spinner("Enviando arquivos..."):
@@ -106,6 +105,8 @@ def app():
                     "ref_path": ref_url,
                     "exec_path": exec_url
                 }
+
+                st.write("🧪 Dados que serão enviados:", job_data)
 
                 # Grava no MongoDB
                 result = coll_jobs.insert_one(job_data)
