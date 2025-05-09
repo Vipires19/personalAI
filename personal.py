@@ -41,7 +41,7 @@ with st.sidebar:
             )
 
 # --- Conexão com MongoDB ---
-client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (username_mongo, password_mongo))
+client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (MONGO_USER, MONGO_PASS))
 db = client.personalAI
 coll_users = db.usuarios
 coll_jobs = db.jobs
