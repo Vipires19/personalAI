@@ -4,9 +4,9 @@ import streamlit as st
 
 R2_KEY = st.secrets["R2_KEY"]
 R2_SECRET_KEY = st.secrets["R2_SECRET_KEY"]
-ENDPOINT_URL = st.secrets["ENDPOINT_URL"]
+URL = st.secrets["ENDPOINT_URL"]
 
-def get_r2_client(R2_KEY, R2_SECRET_KEY, ENDPOINT_URL):
+def get_r2_client(R2_KEY, R2_SECRET_KEY, URL):
     return boto3.client(
         's3',
         aws_access_key_id=R2_KEY,
