@@ -41,10 +41,10 @@ with st.sidebar:
             )
 
 # --- Conexão com MongoDB ---
-client = MongoClient(MONGO_URI)
-db = client.get_default_database()
-coll_users = db['usuarios']
-coll_jobs = db['jobs']
+client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (username_mongo, password_mongo))
+db = client.personalAI
+coll_users = db.usuarios
+coll_jobs = db.jobs
 
 
 # Configura o client R2
@@ -105,8 +105,6 @@ def app():
                     "ref_path": ref_url,
                     "exec_path": exec_url
                 }
-
-                st.write("🧪 Dados que serão enviados:", job_data)
 
                 # Grava no MongoDB
                 result = coll_jobs.insert_one(job_data)
