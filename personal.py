@@ -42,9 +42,9 @@ with st.sidebar:
 
 # --- Conexão com MongoDB ---
 client = MongoClient(MONGO_URI)
-db = client.personalAI
-coll_users = db.usuarios
-coll_jobs = db.jobs
+db = client['personalAI']
+coll_users = db['usuarios']
+coll_jobs = db['jobs']
 
 
 # Configura o client R2
