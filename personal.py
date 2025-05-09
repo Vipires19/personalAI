@@ -13,7 +13,7 @@ import uuid
 API_KEY = st.secrets['OPENAI_API_KEY']
 MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
-MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/personalAI?retryWrites=true&w=majority&appName=Cluster0"
 BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
 R2_KEY = st.secrets['R2_KEY']
 R2_SECRET_KEY = st.secrets['R2_SECRET_KEY']
@@ -42,7 +42,7 @@ with st.sidebar:
 
 # --- Conexão com MongoDB ---
 client = MongoClient(MONGO_URI)
-db = client['personalAI']
+db = client.get_default_database()
 coll_users = db['usuarios']
 coll_jobs = db['jobs']
 
