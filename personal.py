@@ -12,7 +12,7 @@ API_KEY = st.secrets['OPENAI_API_KEY']
 MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
 MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-BUCKET_PUBLIC_URL = st.secrets['R2_PUBLIC_URL']
+BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
 
 # --- Conexão com MongoDB ---
 client = MongoClient(MONGO_URI, ssl=True)
