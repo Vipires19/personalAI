@@ -44,7 +44,7 @@ with st.sidebar:
 client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (MONGO_USER, MONGO_PASS))
 db = client.personalAI
 coll_users = db.usuarios
-coll_jobs = db.jobs
+coll_jobs = db.jobs_fila
 
 
 # Configura o client R2
