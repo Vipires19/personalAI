@@ -79,6 +79,8 @@ def app():
         exec_video = st.file_uploader("Vídeo de Execução", type=["mp4"])
 
     if ref_video and exec_video and student_name:
+        st.write("🧪 Dados que serão enviados:", job_data)
+
         if st.button("🚀 Enviar para Análise"):
             with st.spinner("Enviando arquivos..."):
                 ref_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
