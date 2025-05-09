@@ -12,7 +12,7 @@ API_KEY = st.secrets['OPENAI_API_KEY']
 MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
 MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
+BUCKET_PUBLIC_URL = st.secrets['R2_PUBLIC_URL']
 
 # --- Conexão com MongoDB ---
 client = MongoClient(MONGO_URI, ssl=True)
@@ -37,15 +37,23 @@ authenticator.login()
 layout = st.query_params.get("layout", "centered")
 if layout not in ["wide", "centered"]:
     layout = "centered"
+
 st.set_page_config(page_title="Comparador de Execuções - Personal", layout=layout)
 
 with st.sidebar:
+    st.write(f"Layout atual: **{layout.upper()}**")
     if layout == "centered":
-        if st.button("Versão Desktop"):
-            st.markdown('<meta http-equiv="refresh" content="0; URL=/?layout=wide">', unsafe_allow_html=True)
+        if st.button("🖥️ Versão Desktop"):
+            st.markdown(
+                '<meta http-equiv="refresh" content="0; URL=/?layout=wide">',
+                unsafe_allow_html=True
+            )
     else:
-        if st.button("Versão Mobile"):
-            st.markdown('<meta http-equiv="refresh" content="0; URL=/?layout=centered">', unsafe_allow_html=True)
+        if st.button("📱 Versão Mobile"):
+            st.markdown(
+                '<meta http-equiv="refresh" content="0; URL=/?layout=centered">',
+                unsafe_allow_html=True
+            )
 
 # --- App Principal ---
 def app():
