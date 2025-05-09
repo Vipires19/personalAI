@@ -48,7 +48,7 @@ coll_jobs = db.jobs
 
 
 # Configura o client R2
-r2 = get_r2_client(R2_KEY, R2_SECRET_KEY, ENDPOINT_URL)
+r2 = get_r2_client(R2_KEY, R2_SECRET_KEY, BUCKET_PUBLIC_URL)
 BUCKET_NAME = st.secrets["R2_BUCKET_NAME"]
 
 # --- Autenticação ---
