@@ -6,6 +6,8 @@ import datetime
 import tempfile
 import os
 from bson.objectid import ObjectId
+from utils.r2_utils import get_r2_client
+import uuid
 
 # --- Configurações iniciais ---
 API_KEY = st.secrets['OPENAI_API_KEY']
@@ -13,6 +15,8 @@ MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
 MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
+R2_KEY = st.secrets['R2_KEY']
+R2_SECRET_KEY = st.secrets['R2_SECRET_KEY']
 
 # --- Layout ---
 layout = st.query_params.get("layout", "centered")
@@ -41,6 +45,11 @@ client = MongoClient(MONGO_URI, ssl=True)
 db = client.personalAI
 coll_users = db.usuarios
 coll_jobs = db.jobs
+
+
+# Configura o client R2
+r2 = get_r2_client(R2_KEY, R2_SECRET_KEY, ENDPOINT_URL)
+BUCKET_NAME = st.secrets["R2_BUCKET_NAME"]
 
 # --- Autenticação ---
 users = list(coll_users.find({}, {'_id': 0}))
@@ -77,13 +86,23 @@ def app():
                 ref_temp.write(ref_video.read())
                 exec_temp.write(exec_video.read())
 
+                # Upload para o R2
+                ref_filename = f"{uuid.uuid4()}_ref.mp4"
+                exec_filename = f"{uuid.uuid4()}_exec.mp4"
+                
+                r2.upload_file(Filename=ref_temp.name, Bucket=BUCKET_NAME, Key=ref_filename)
+                r2.upload_file(Filename=exec_temp.name, Bucket=BUCKET_NAME, Key=exec_filename)
+                
+                ref_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{ref_filename}"
+                exec_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{exec_filename}"
+
                 job_data = {
                     "user": st.session_state['username'],
                     "student": student_name,
                     "status": "pending",
                     "created_at": datetime.datetime.utcnow(),
-                    "ref_path": ref_temp.name,
-                    "exec_path": exec_temp.name
+                    "ref_path": ref_url,
+                    "exec_path": exec_url
                 }
                 job_id = coll_jobs.insert_one(job_data).inserted_id
 
