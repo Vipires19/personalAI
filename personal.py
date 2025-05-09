@@ -14,25 +14,6 @@ MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
 MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
 
-# --- Conexão com MongoDB ---
-client = MongoClient(MONGO_URI, ssl=True)
-db = client.personalAI
-coll_users = db.usuarios
-coll_jobs = db.jobs
-
-# --- Autenticação ---
-users = list(coll_users.find({}, {'_id': 0}))
-credentials = {
-    'usernames': {
-        u['username']: {
-            'name': u['name'],
-            'password': u['password'][0]
-        } for u in users
-    }
-}
-authenticator = stauth.Authenticate(credentials, 'cookie', 'key123', cookie_expiry_days=1)
-authenticator.login()
-
 # --- Layout ---
 layout = st.query_params.get("layout", "centered")
 if layout not in ["wide", "centered"]:
@@ -54,6 +35,25 @@ with st.sidebar:
                 '<meta http-equiv="refresh" content="0; URL=/?layout=centered">',
                 unsafe_allow_html=True
             )
+
+# --- Conexão com MongoDB ---
+client = MongoClient(MONGO_URI, ssl=True)
+db = client.personalAI
+coll_users = db.usuarios
+coll_jobs = db.jobs
+
+# --- Autenticação ---
+users = list(coll_users.find({}, {'_id': 0}))
+credentials = {
+    'usernames': {
+        u['username']: {
+            'name': u['name'],
+            'password': u['password'][0]
+        } for u in users
+    }
+}
+authenticator = stauth.Authenticate(credentials, 'cookie', 'key123', cookie_expiry_days=1)
+authenticator.login()
 
 # --- App Principal ---
 def app():
