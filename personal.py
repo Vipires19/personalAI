@@ -41,7 +41,7 @@ with st.sidebar:
             )
 
 # --- Conexão com MongoDB ---
-client = MongoClient(MONGO_URI, ssl=True)
+client = MongoClient(MONGO_URI)
 db = client.personalAI
 coll_users = db.usuarios
 coll_jobs = db.jobs
