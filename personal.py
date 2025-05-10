@@ -115,21 +115,48 @@ def app():
     st.divider()
     st.subheader("📊 Minhas Análises")
     jobs = coll_jobs.find({"user": st.session_state['username']}).sort("created_at", -1)
+    
     for job in jobs:
-        with st.expander(f"📌 {job['student']} - {job['created_at'].strftime('%d/%m/%Y %H:%M')}"):
+        created_at = job.get("created_at")
+    
+        # Garante que 'created_at' seja um datetime para usar strftime
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at)
+            except ValueError:
+                try:
+                    created_at = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%S.%f")
+                except Exception:
+                    created_at = None
+    
+        date_str = created_at.strftime('%d/%m/%Y %H:%M') if created_at else "Data inválida"
+    
+        with st.expander(f"📌 {job['student']} - {date_str}"):
             st.write(f"**Status:** {job['status'].capitalize()}")
+    
             if job['status'] == "done":
                 if 'video_url' in job:
                     st.video(f"{BUCKET_PUBLIC_URL}/{job['video_url']}")
-                    st.download_button("📥 Baixar Vídeo", f"{BUCKET_PUBLIC_URL}/{job['video_url']}", file_name=f"{job['student']}_comparativo.mp4")
+                    st.download_button(
+                        "📥 Baixar Vídeo",
+                        f"{BUCKET_PUBLIC_URL}/{job['video_url']}",
+                        file_name=f"{job['student']}_comparativo.mp4"
+                    )
+    
                 if 'report_url' in job:
-                    st.download_button("📄 Baixar PDF", f"{BUCKET_PUBLIC_URL}/{job['report_url']}", file_name=f"{job['student']}_relatorio.pdf")
+                    st.download_button(
+                        "📄 Baixar PDF",
+                        f"{BUCKET_PUBLIC_URL}/{job['report_url']}",
+                        file_name=f"{job['student']}_relatorio.pdf"
+                    )
+    
                 if 'feedback' in job:
                     with st.expander("📋 Feedback Inteligente"):
                         st.write(job['feedback'])
+    
             elif job['status'] == "error":
                 st.error("Erro na análise. Tente novamente.")
-
+                
 # --- Execução ---
 if st.session_state["authentication_status"]:
     app()
