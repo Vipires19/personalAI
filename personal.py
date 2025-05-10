@@ -101,7 +101,7 @@ def app():
                     "user": st.session_state['username'],
                     "student": student_name,
                     "status": "pending",
-                    "created_at": datetime.datetime.utcnow(),
+                    "created_at": datetime.utcnow(),
                     "ref_path": ref_url,
                     "exec_path": exec_url
                 }
