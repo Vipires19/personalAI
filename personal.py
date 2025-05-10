@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit_authenticator as stauth
 from pymongo import MongoClient
 import urllib.parse
-import datetime
+from datetime import datetime
 import tempfile
 import os
 from bson.objectid import ObjectId
