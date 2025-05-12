@@ -15,6 +15,7 @@ MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
 MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/personalAI?retryWrites=true&w=majority&appName=Cluster0"
 BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
+BUCKET_PUBLIC_URL_2 = st.secrets['URL_BUCKET']
 R2_KEY = st.secrets['R2_KEY']
 R2_SECRET_KEY = st.secrets['R2_SECRET_KEY']
 
@@ -136,17 +137,17 @@ def app():
     
             if job['status'] == "done":
                 if 'video_url' in job:
-                    st.video(f"{BUCKET_PUBLIC_URL}/{job['video_url']}")
+                    st.video(f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}")
                     st.download_button(
                         "📥 Baixar Vídeo",
-                        f"{BUCKET_PUBLIC_URL}/{job['video_url']}",
+                        f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}",
                         file_name=f"{job['student']}_comparativo.mp4"
                     )
     
                 if 'report_url' in job:
                     st.download_button(
                         "📄 Baixar PDF",
-                        f"{BUCKET_PUBLIC_URL}/{job['report_url']}",
+                        f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}",
                         file_name=f"{job['student']}_relatorio.pdf"
                     )
     
