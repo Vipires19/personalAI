@@ -151,8 +151,8 @@ def app():
                     )
     
                 if 'feedback' in job:
-                    st.markdown("📋 Feedback Inteligente"):
-                        st.write(job['feedback'])
+                    st.markdown("📋 Feedback Inteligente")
+                    st.write(job['feedback'])
     
             elif job['status'] == "error":
                 st.error("Erro na análise. Tente novamente.")
