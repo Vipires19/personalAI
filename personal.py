@@ -66,7 +66,99 @@ authenticator = stauth.Authenticate(credentials, 'cookie', 'key123', cookie_expi
 authenticator.login()
 
 # --- App Principal ---
-def app():
+def show_student_dashboard():
+    st.title("🏋️ Análise de Exercícios com IA")
+    st.image("assets/logo.jpg", width=200)
+    st.header(f"Bem-vindo, {st.session_state['name']}")
+
+    if authenticator.logout():
+        st.session_state["authentication_status"] = None
+
+    student_name = st.text_input("Nome do aluno")
+    with st.expander("📤 Upload dos Vídeos"):
+        ref_video = st.file_uploader("Vídeo de Referência", type=["mp4"])
+        exec_video = st.file_uploader("Vídeo de Execução", type=["mp4"])
+
+    if ref_video and exec_video and student_name:
+
+        if st.button("🚀 Enviar para Análise"):
+            with st.spinner("Enviando arquivos..."):
+                ref_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                exec_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                ref_temp.write(ref_video.read())
+                exec_temp.write(exec_video.read())
+
+                # Upload para o R2
+                ref_filename = f"{uuid.uuid4()}_ref.mp4"
+                exec_filename = f"{uuid.uuid4()}_exec.mp4"
+                
+                r2.upload_file(Filename=ref_temp.name, Bucket=BUCKET_NAME, Key=ref_filename)
+                r2.upload_file(Filename=exec_temp.name, Bucket=BUCKET_NAME, Key=exec_filename)
+                
+                ref_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{ref_filename}"
+                exec_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{exec_filename}"
+
+                job_data = {
+                    "user": st.session_state['username'],
+                    "student": student_name,
+                    "status": "pending",
+                    "created_at": datetime.utcnow(),
+                    "ref_path": ref_url,
+                    "exec_path": exec_url
+                }
+
+                # Grava no MongoDB
+                result = coll_jobs.insert_one(job_data)
+                st.success(f"✅ Enviado para análise. ID do job: {result.inserted_id}")
+                #job_id = coll_jobs.insert_one(job_data).inserted_id
+                #st.success("✅ Enviado para análise. Verifique abaixo o status.")
+
+    st.divider()
+    st.subheader("📊 Minhas Análises")
+    jobs = coll_jobs.find({"user": st.session_state['username']}).sort("created_at", -1)
+    
+    for job in jobs:
+        created_at = job.get("created_at")
+    
+        # Garante que 'created_at' seja um datetime para usar strftime
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at)
+            except ValueError:
+                try:
+                    created_at = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%S.%f")
+                except Exception:
+                    created_at = None
+    
+        date_str = created_at.strftime('%d/%m/%Y %H:%M') if created_at else "Data inválida"
+    
+        with st.expander(f"📌 {job['student']} - {date_str}"):
+            st.write(f"**Status:** {job['status'].capitalize()}")
+    
+            if job['status'] == "done":
+                if 'video_url' in job:
+                    st.video(f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}")
+                    st.download_button(
+                        "📥 Baixar Vídeo",
+                        f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}",
+                        file_name=f"{job['student']}_comparativo.mp4"
+                    )
+    
+                if 'report_url' in job:
+                    st.download_button(
+                        "📄 Baixar PDF",
+                        f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}",
+                        file_name=f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}"
+                    )
+    
+                if 'feedback' in job:
+                    st.markdown("📋 Feedback Inteligente")
+                    st.write(job['feedback'])
+    
+            elif job['status'] == "error":
+                st.error("Erro na análise. Tente novamente.")
+
+def show_personal_dashboard():
     st.title("🏋️ Análise de Exercícios com IA")
     st.image("assets/logo.jpg", width=200)
     st.header(f"Bem-vindo, {st.session_state['name']}")
@@ -160,7 +252,14 @@ def app():
                 
 # --- Execução ---
 if st.session_state["authentication_status"]:
-    app()
+    role = st.session_state.get("role")
+
+    if role == "personal":
+        show_personal_dashboard()
+    elif role == "aluno":
+        show_student_dashboard()
+        
+
 elif st.session_state["authentication_status"] == False:
     st.error("Usuário/senha incorretos")
 elif st.session_state["authentication_status"] is None:
