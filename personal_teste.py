@@ -1,132 +1,167 @@
 import streamlit as st
 import streamlit_authenticator as stauth
-from services.pose_extractor import extract_landmarks_from_video
-from services.pose_analyzer import analyze_poses
-from services.video_generator import generate_comparative_video
-from utils.helpers import generate_pdf_report
-from utils.openai_feedback import generate_feedback_via_openai
-import tempfile
-import os
 from pymongo import MongoClient
 import urllib.parse
-import streamlit.components.v1 as components
+from datetime import datetime
+import tempfile
+import os
+from bson.objectid import ObjectId
+from utils.r2_utils import get_r2_client
+import uuid
 
-# ----------------- Função de detecção de dispositivo -----------------
-def detectar_dispositivo():
-    if "dispositivo_detectado" not in st.session_state:
-        components.html(
-            """
-            <script>
-            const isMobile = /android|iphone|ipad|mobile/i.test(navigator.userAgent);
-            window.parent.postMessage({isMobile: isMobile}, "*");
-            </script>
-            """,
-            height=0
-        )
-
-# Valor default
-if "is_mobile" not in st.session_state:
-    st.session_state["is_mobile"] = False
-
-# ----------------- Configura Mongo e Autenticação -----------------
+# --- Configurações iniciais ---
 API_KEY = st.secrets['OPENAI_API_KEY']
-st.set_page_config(page_title="Comparador de Execuções - Personal", layout="wide")
+MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
+MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
+MONGO_URI = f"mongodb+srv://{MONGO_USER}:{MONGO_PASS}@cluster0.gjkin5a.mongodb.net/personalAI?retryWrites=true&w=majority&appName=Cluster0"
+BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
+BUCKET_PUBLIC_URL_2 = st.secrets['URL_BUCKET']
+R2_KEY = st.secrets['R2_KEY']
+R2_SECRET_KEY = st.secrets['R2_SECRET_KEY']
 
-mongo_user = st.secrets['MONGO_USER']
-mongo_pass = st.secrets["MONGO_PASS"]
-username = urllib.parse.quote_plus(mongo_user)
-password = urllib.parse.quote_plus(mongo_pass)
-client = MongoClient(f"mongodb+srv://{username}:{password}@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+# --- Layout ---
+layout = st.query_params.get("layout", "centered")
+if layout not in ["wide", "centered"]:
+    layout = "centered"
+
+st.set_page_config(page_title="Comparador de Execuções - Personal", layout=layout)
+
+with st.sidebar:
+    st.write(f"Layout atual: **{layout.upper()}**")
+    if layout == "centered":
+        if st.button("🖥️ Versão Desktop"):
+            st.markdown(
+                '<meta http-equiv="refresh" content="0; URL=/?layout=wide">',
+                unsafe_allow_html=True
+            )
+    else:
+        if st.button("📱 Versão Mobile"):
+            st.markdown(
+                '<meta http-equiv="refresh" content="0; URL=/?layout=centered">',
+                unsafe_allow_html=True
+            )
+
+# --- Conexão com MongoDB ---
+client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (MONGO_USER, MONGO_PASS))
 db = client.personalAI
-coll = db.usuarios
+coll_users = db.usuarios
+coll_jobs = db.jobs_fila
 
-# Autenticação
-user = coll.find({})
-usuarios = {'usernames': {}}
-for item in user:
-    item.pop('_id', None)
-    usuarios['usernames'][item['username']] = {'name': item['name'], 'password': item['password'][0]}
 
-authenticator = stauth.Authenticate(credentials=usuarios, cookie_name='random_cookie_name', cookie_key='key123', cookie_expiry_days=1)
+# Configura o client R2
+r2 = get_r2_client(R2_KEY, R2_SECRET_KEY, BUCKET_PUBLIC_URL)
+BUCKET_NAME = st.secrets["R2_BUCKET"]
+
+# --- Autenticação ---
+users = list(coll_users.find({}, {'_id': 0}))
+credentials = {
+    'usernames': {
+        u['username']: {
+            'name': u['name'],
+            'password': u['password'][0]
+        } for u in users
+    }
+}
+authenticator = stauth.Authenticate(credentials, 'cookie', 'key123', cookie_expiry_days=1)
 authenticator.login()
 
-# ----------------- App Principal -----------------
-def app_principal():
-    st.title("🏋️ Sistema de Análise de Exercícios com IA")
+# --- App Principal ---
+def app():
+    st.title("🏋️ Análise de Exercícios com IA")
     st.image("assets/logo.jpg", width=200)
     st.header(f"Bem-vindo, {st.session_state['name']}")
+
     if authenticator.logout():
         st.session_state["authentication_status"] = None
 
-    st.write("Envie os vídeos para comparar a execução do aluno com o modelo de referência.")
-    student_name = st.text_input("Nome do aluno:", max_chars=50)
-    ref_video = st.file_uploader("Vídeo de Referência", type=["mp4", "mov", "m4v", "avi", "webm", "qt"])
-    exec_video = st.file_uploader("Vídeo de Execução", type=["mp4", "mov", "m4v", "avi", "webm", "qt"])
-
-    detectar_dispositivo()
+    student_name = st.text_input("Nome do aluno")
+    with st.expander("📤 Upload dos Vídeos"):
+        ref_video = st.file_uploader("Vídeo de Referência", type=["mp4"])
+        exec_video = st.file_uploader("Vídeo de Execução", type=["mp4"])
 
     if ref_video and exec_video and student_name:
-        if st.button("🚀 Analisar"):
-            with st.spinner("Processando os vídeos..."):
+
+        if st.button("🚀 Enviar para Análise"):
+            with st.spinner("Enviando arquivos..."):
                 ref_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
                 exec_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
                 ref_temp.write(ref_video.read())
                 exec_temp.write(exec_video.read())
 
+                # Upload para o R2
+                ref_filename = f"{uuid.uuid4()}_ref.mp4"
+                exec_filename = f"{uuid.uuid4()}_exec.mp4"
+                
+                r2.upload_file(Filename=ref_temp.name, Bucket=BUCKET_NAME, Key=ref_filename)
+                r2.upload_file(Filename=exec_temp.name, Bucket=BUCKET_NAME, Key=exec_filename)
+                
+                ref_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{ref_filename}"
+                exec_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{exec_filename}"
+
+                job_data = {
+                    "user": st.session_state['username'],
+                    "student": student_name,
+                    "status": "pending",
+                    "created_at": datetime.utcnow(),
+                    "ref_path": ref_url,
+                    "exec_path": exec_url
+                }
+
+                # Grava no MongoDB
+                result = coll_jobs.insert_one(job_data)
+                st.success(f"✅ Enviado para análise. ID do job: {result.inserted_id}")
+                #job_id = coll_jobs.insert_one(job_data).inserted_id
+                #st.success("✅ Enviado para análise. Verifique abaixo o status.")
+
+    st.divider()
+    st.subheader("📊 Minhas Análises")
+    jobs = coll_jobs.find({"user": st.session_state['username']}).sort("created_at", -1)
+    
+    for job in jobs:
+        created_at = job.get("created_at")
+    
+        # Garante que 'created_at' seja um datetime para usar strftime
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at)
+            except ValueError:
                 try:
-                    frames_ref, landmarks_ref = extract_landmarks_from_video(ref_temp.name)
-                    frames_exec, landmarks_exec = extract_landmarks_from_video(exec_temp.name)
-                    insights, avg_error, avg_errors = analyze_poses(landmarks_ref, landmarks_exec)
-
-                    comparative_video_bytes = generate_comparative_video(frames_ref, landmarks_ref, frames_exec, landmarks_exec)
-                    if not comparative_video_bytes:
-                        st.error("Erro ao gerar o vídeo comparativo.")
-                        return
-
-                    full_feedback = generate_feedback_via_openai(avg_errors, API_KEY)
-
-                    st.success("✅ Análise concluída!")
-                    st.header("🎬 Resultado da Comparacão")
-
-                    if st.session_state["is_mobile"]:
-                        st.warning("Modo celular detectado. Baixe o vídeo abaixo para evitar travamentos.")
-                        st.download_button("📥 Baixar vídeo", data=comparative_video_bytes, file_name="comparativo.mp4")
-                    else:
-                        st.video(comparative_video_bytes)
-
-                    st.subheader("📋 Feedback Inteligente")
-                    st.write(full_feedback)
-
-                    os.makedirs("reports", exist_ok=True)
-                    video_path = f"reports/{student_name}_comparativo.mp4"
-                    with open(video_path, "wb") as f:
-                        f.write(comparative_video_bytes)
-                    report_path = f"reports/{student_name}_relatorio.pdf"
-                    generate_pdf_report(student_name, insights, avg_error, video_path, report_path, full_feedback=full_feedback)
-
-                    if os.path.exists(report_path):
-                        with open(report_path, "rb") as pdf_file:
-                            st.download_button("📄 Baixar Relatório PDF", data=pdf_file.read(), file_name=f"{student_name}_relatorio.pdf")
-
-                finally:
-                    ref_temp.close()
-                    exec_temp.close()
-                    try:
-                        os.unlink(ref_temp.name)
-                        os.unlink(exec_temp.name)
-                    except:
-                        pass
-    else:
-        st.info("Preencha o nome do aluno e envie os dois vídeos para começar.")
-
-# ----------------- Main -----------------
-def main():
-    if st.session_state["authentication_status"]:
-        app_principal()
-    elif st.session_state["authentication_status"] == False:
-        st.error("Username/password incorretos")
-    elif st.session_state["authentication_status"] is None:
-        st.warning("Digite seu usuário e senha para acessar")
-
-if __name__ == '__main__':
-    main()
+                    created_at = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%S.%f")
+                except Exception:
+                    created_at = None
+    
+        date_str = created_at.strftime('%d/%m/%Y %H:%M') if created_at else "Data inválida"
+    
+        with st.expander(f"📌 {job['student']} - {date_str}"):
+            st.write(f"**Status:** {job['status'].capitalize()}")
+    
+            if job['status'] == "done":
+                if 'video_url' in job:
+                    st.video(f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}")
+                    st.download_button(
+                        "📥 Baixar Vídeo",
+                        f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}",
+                        file_name=f"{job['student']}_comparativo.mp4"
+                    )
+    
+                if 'report_url' in job:
+                    st.download_button(
+                        "📄 Baixar PDF",
+                        f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}",
+                        file_name=f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}"
+                    )
+    
+                if 'feedback' in job:
+                    st.markdown("📋 Feedback Inteligente")
+                    st.write(job['feedback'])
+    
+            elif job['status'] == "error":
+                st.error("Erro na análise. Tente novamente.")
+                
+# --- Execução ---
+if st.session_state["authentication_status"]:
+    app()
+elif st.session_state["authentication_status"] == False:
+    st.error("Usuário/senha incorretos")
+elif st.session_state["authentication_status"] is None:
+    st.warning("Informe usuário e senha")
