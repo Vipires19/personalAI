@@ -147,7 +147,7 @@ def app():
                 if 'report_url' in job:
                     st.download_button(
                         "📄 Baixar PDF",
-                        f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}"
+                        f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}",
                         file_name=f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}"
                     )
     
