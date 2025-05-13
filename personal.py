@@ -163,7 +163,7 @@ def show_personal_dashboard():
     st.title("🏋️ Análise de Exercícios com IA")
     st.image("assets/logo.jpg", width=200)
     st.header(f"Bem-vindo, {st.session_state['name']}")
-    st.header('Dashboard Personal")
+    st.header("Dashboard Personal")
 
     if authenticator.logout():
         st.session_state["authentication_status"] = None
