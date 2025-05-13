@@ -75,7 +75,7 @@ def show_student_dashboard():
     if authenticator.logout():
         st.session_state["authentication_status"] = None
 
-    student_name = st.text_input("Nome do aluno")
+    student_name = st.markdown(f"**Nome do aluno**: {st.session_state['name']}")
     with st.expander("📤 Upload dos Vídeos"):
         ref_video = st.file_uploader("Vídeo de Referência", type=["mp4"])
         exec_video = st.file_uploader("Vídeo de Execução", type=["mp4"])
