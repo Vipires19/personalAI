@@ -70,7 +70,6 @@ def show_student_dashboard():
     st.title("🏋️ Análise de Exercícios com IA")
     st.image("assets/logo.jpg", width=200)
     st.header(f"Bem-vindo, {st.session_state['name']}")
-    st.header(f"Dashboard Aluno")
 
     if authenticator.logout():
         st.session_state["authentication_status"] = None
@@ -163,7 +162,6 @@ def show_personal_dashboard():
     st.title("🏋️ Análise de Exercícios com IA")
     st.image("assets/logo.jpg", width=200)
     st.header(f"Bem-vindo, {st.session_state['name']}")
-    st.header(f"Dashboard professor")
 
     if authenticator.logout():
         st.session_state["authentication_status"] = None
@@ -254,6 +252,10 @@ def show_personal_dashboard():
                 
 # --- Execução ---
 if st.session_state["authentication_status"]:
+    user_doc = coll_users.find_one({"username": st.session_state["username"]})
+    if user_doc and "role" in user_doc:
+        st.session_state["role"] = user_doc["role"]
+    
     role = st.session_state["role"]
 
     if role == "personal":
