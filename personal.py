@@ -254,7 +254,7 @@ def show_personal_dashboard():
                 
 # --- Execução ---
 if st.session_state["authentication_status"]:
-    role = st.session_state.get("role")
+    role = st.session_state["role"]
 
     if role == "personal":
         show_personal_dashboard()
