@@ -8,6 +8,9 @@ import os
 from bson.objectid import ObjectId
 from utils.r2_utils import get_r2_client
 import uuid
+from services.chat_professor import AgentChat
+from langchain_core.prompts.chat import AIMessage
+import logging
 
 # --- Configurações iniciais ---
 API_KEY = st.secrets['OPENAI_API_KEY']
@@ -18,6 +21,11 @@ BUCKET_PUBLIC_URL = st.secrets['ENDPOINT_URL']
 BUCKET_PUBLIC_URL_2 = st.secrets['URL_BUCKET']
 R2_KEY = st.secrets['R2_KEY']
 R2_SECRET_KEY = st.secrets['R2_SECRET_KEY']
+DB_PATH = "database/memoria_chatbot.db"
+
+agent_1 = AgentChat(DB_PATH)
+model_1 = agent_1.memory_agent()
+
 
 # --- Layout ---
 layout = st.query_params.get("layout", "centered")
@@ -65,17 +73,15 @@ credentials = {
 authenticator = stauth.Authenticate(credentials, 'cookie', 'key123', cookie_expiry_days=1)
 authenticator.login()
 
-# --- App Principal ---
-def show_student_dashboard():
-    st.title("🏋️ Análise de Exercícios com IA")
-    st.image("assets/logo.jpg", width=200)
-    st.header(f"Bem-vindo, {st.session_state['name']}")
-    st.header("Dashboard Aluno")
+def analise_exec(student_name):
+    #st.title("🏋️ Análise de Exercícios com IA")
+    #st.image("assets/logo.jpg", width=200)
+    #st.header(f"Bem-vindo, {st.session_state['name']}")
 
     if authenticator.logout():
         st.session_state["authentication_status"] = None
 
-    student_name = st.markdown(f"**Nome do aluno**: {st.session_state['name']}")
+    student_name = student_name #st.text_input("Nome do aluno")
     with st.expander("📤 Upload dos Vídeos"):
         ref_video = st.file_uploader("Vídeo de Referência", type=["mp4"])
         exec_video = st.file_uploader("Vídeo de Execução", type=["mp4"])
@@ -159,11 +165,75 @@ def show_student_dashboard():
             elif job['status'] == "error":
                 st.error("Erro na análise. Tente novamente.")
 
-def show_personal_dashboard():
+def agent_memory(agent_model, input: str, thread_id: str, date : str = None):
+    try:
+        if not thread_id:
+            raise ValueError("thread_id é obrigatório no config.")
+
+        inputs = {"messages": [{"role": "user", "content": input}]}
+        print(f"Entradas para o modelo: {inputs}")
+
+        # Apenas passa o thread_id no config, pois a memória já está no modelo
+        config = {"configurable": {"thread_id": thread_id, "data": date}}
+        
+        # Executa o agente
+        messages = agent_model.invoke(inputs, config)
+        print(f"Mensagens geradas: {messages}")
+
+        # Filtra a resposta
+        for msg in reversed(messages["messages"]):
+            if isinstance(msg, AIMessage):
+                return msg.content
+
+        return "Erro: Nenhuma resposta encontrada."
+
+    except Exception as e:
+        logging.error(f"Erro ao invocar o agente: {str(e)}")
+        raise
+
+def run_agent_interface():
+    if 'mensagens' not in st.session_state:
+        st.session_state["mensagens"] = []
+    if 'conversa_atual' not in st.session_state:
+        st.session_state["conversa_atual"] = ''   
+    
+    mensagens = st.session_state["mensagens"]
+
+    for mensagem in mensagens:
+        chat = st.chat_message(mensagem['role'])
+        chat.markdown(mensagem['content'])
+
+    prompt = st.chat_input("Fale com o ATLAS 🌎")
+    if prompt:
+        nova_mensagem = {'role': 'user', 'content': prompt}
+        chat = st.chat_message(nova_mensagem['role'])
+        chat.markdown(nova_mensagem['content'])
+        mensagens.append(nova_mensagem)
+        st.session_state['mensagens'] = mensagens
+
+        chat = st.chat_message('assistant')
+        placeholder = chat.empty()
+        placeholder.markdown('⎸')
+
+        respostas = agent_memory(
+            agent_model=model_1,
+            input=prompt,
+            thread_id=st.session_state['name'],
+            date=datetime.utcnow()
+        )
+
+        placeholder.markdown(respostas)
+
+        nova_mensagem = {'role': 'assistant', 'content': respostas}
+        mensagens.append(nova_mensagem)
+        st.session_state['mensagens'] = mensagens
+
+
+# --- App Principal ---
+def show_student_dashboard():
     st.title("🏋️ Análise de Exercícios com IA")
     st.image("assets/logo.jpg", width=200)
     st.header(f"Bem-vindo, {st.session_state['name']}")
-    st.header("Dashboard Personal")
 
     if authenticator.logout():
         st.session_state["authentication_status"] = None
@@ -251,6 +321,48 @@ def show_personal_dashboard():
     
             elif job['status'] == "error":
                 st.error("Erro na análise. Tente novamente.")
+
+def show_personal_dashboard():
+    #st.title("🏋️ HUB Personal Trainer CAMPPO AI")
+    #st.image("assets/logo.jpg", width=200)
+    #st.header(f"Bem-vindo, {st.session_state['name']}")
+
+    # Inicializa o estado da página se não estiver presente
+    if "pagina_atual" not in st.session_state:
+        st.session_state["pagina_atual"] = "home"
+
+    # Sidebar de navegação
+    with st.sidebar:
+        st.divider()
+        if st.button("🏋️ Análise de Exercícios com IA"):
+            st.session_state["pagina_atual"] = "analise"
+
+        if st.button("🤖🏃‍♂️‍➡️ Agent treinador"):
+            st.session_state["pagina_atual"] = "agent"
+
+        if st.button("🏠 Voltar ao início"):
+            st.session_state["pagina_atual"] = "home"
+
+    # Conteúdo principal com base na seleção
+    if st.session_state["pagina_atual"] == "home":
+        st.title("🏋️ HUB Personal Trainer CAMPPO AI")
+        st.image("assets/logo.jpg", width=200)
+        st.header(f"Bem-vindo, {st.session_state['name']}")
+
+    if st.session_state["pagina_atual"] == "analise":
+        st.title("🏋️ Análise de Exercícios com IA")
+        st.image("assets/logo.jpg", width=200)
+        student_name = st.text_input("Nome do aluno")
+        if student_name:
+            analise_exec(student_name)
+
+    elif st.session_state["pagina_atual"] == "agent":
+        st.title("🤖 Agente IA Treinador")
+        run_agent_interface()  # Aqui você coloca a função com o agent Streamlit
+
+    elif st.session_state["pagina_atual"] == "home":
+        st.info("Selecione uma opção no menu lateral para começar.")
+    
                 
 # --- Execução ---
 if st.session_state["authentication_status"]:
