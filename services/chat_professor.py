@@ -188,7 +188,7 @@ class AgentChat:
 
     def _init_memory(self):
         # 💥 Aqui usamos o método CORRETO pra sua versão (sem context manager!)
-        conn = sqlite3.connect("database/memoria_chatbot2.db", check_same_thread=False)
+        #conn = sqlite3.connect("database/memoria_chatbot2.db", check_same_thread=False)
         memory = MongoDBSaver(coll)
         return memory
     
