@@ -26,6 +26,8 @@ db = client.personalAI
 coll = db.memoria_chat
 coll2 = db.alunos
 coll3 = db.treinos
+coll4 = db.avaliação
+
 #DB_PATH1 = "memoria_chatbot2.db"
 
 def carrega_txt(caminho):
@@ -174,7 +176,54 @@ def gerar_pdf_treino(nome_aluno: str, treino: str) -> str:
     url_pdf = generate_and_upload_pdf_treino(nome_aluno, treino, s3_client, bucket_name)
     return f"\U0001F4C4 PDF gerado com sucesso: {url_pdf}"
 
-tools = [gerar_treino_personalizado, gerar_pdf_treino,salvar_treino,get_user_by_name]
+@tool('get_evolution_feedback')
+def get_evolution_feedback(student_name: str, user: str) -> str:
+    """
+    Retorna um feedback sobre a evolução física de um aluno com base nas duas últimas avaliações.
+    Parâmetros:
+    - student_name: nome do aluno
+    - user: nome do professor responsável
+    """
+    resultados = list(coll4.find(
+        {"student_name": student_name, "user": user}
+    ).sort("last", -1).limit(2))
+
+    if len(resultados) < 2:
+        return "Ainda não há avaliações suficientes para gerar feedback de evolução. Pelo menos duas avaliações são necessárias."
+
+    atual, anterior = resultados[0], resultados[1]
+
+    def delta(key):
+        return atual.get(key, 0) - anterior.get(key, 0)
+
+    feedback = []
+
+    # Comparação das principais métricas
+    if delta("body_fat") < 0:
+        feedback.append("✅ Houve redução na porcentagem de gordura corporal.")
+    elif delta("body_fat") > 0:
+        feedback.append("⚠️ A gordura corporal aumentou desde a última avaliação.")
+
+    if delta("peso") < 0:
+        feedback.append("📉 O peso corporal total diminuiu.")
+    elif delta("peso") > 0:
+        feedback.append("📈 O peso corporal aumentou.")
+
+    medidas = ["chest", "shoulder", "waist", "hip", "thigh"]
+    for medida in medidas:
+        diff = delta(medida)
+        if abs(diff) > 0.5:
+            direcao = "aumentou" if diff > 0 else "diminuiu"
+            feedback.append(f"🔍 A medida de {medida} {direcao} em {abs(diff):.1f} cm.")
+
+    data_anterior = anterior.get("last", datetime.min).strftime("%d/%m/%Y")
+    data_atual = atual.get("last", datetime.min).strftime("%d/%m/%Y")
+    
+    header = f"📅 Comparação entre avaliações de {data_anterior} e {data_atual} para {student_name}:\n"
+    return header + "\n".join(feedback)
+
+
+tools = [gerar_treino_personalizado, gerar_pdf_treino,salvar_treino,get_user_by_name,get_evolution_feedback]
 tool_executor = ToolNode(tools)
 llm = ChatOpenAI(model="gpt-4o-mini",openai_api_key=OPENAI_API_KEY, streaming=True)
 memory = MongoDBSaver(coll)
@@ -188,7 +237,6 @@ class AgentChat:
 
     def _init_memory(self):
         # 💥 Aqui usamos o método CORRETO pra sua versão (sem context manager!)
-        #conn = sqlite3.connect("database/memoria_chatbot2.db", check_same_thread=False)
         memory = MongoDBSaver(coll)
         return memory
     
