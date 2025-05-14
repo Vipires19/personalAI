@@ -177,7 +177,6 @@ def gerar_pdf_treino(nome_aluno: str, treino: str) -> str:
 tools = [gerar_treino_personalizado, gerar_pdf_treino,salvar_treino,get_user_by_name]
 tool_executor = ToolNode(tools)
 llm = ChatOpenAI(model="gpt-4o-mini",openai_api_key=OPENAI_API_KEY, streaming=True)
-conn = sqlite3.connect("database/memoria_chatbot2.db", check_same_thread=False)
 memory = MongoDBSaver(coll)
 model = create_react_agent(llm, tools,prompt=SYSTEM_PROMPT,checkpointer=memory)
     
