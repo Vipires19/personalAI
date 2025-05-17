@@ -16,6 +16,8 @@ db = client.personalAI
 coll = db.usuarios
 coll1 = db.alunos
 coll2 = db.avaliação
+coll3 = db.treinos
+coll4 = db.jobs_fila
 
 def forms_aluno(professor):
     st.header("🧍‍♂️ Informações Pessoais Básicas")
@@ -187,9 +189,8 @@ def avaliacao(professor):
         return
     
     
-    peso = st.number_input('Peso do aluno (KG)')
+    aluno['peso'] = st.number_input('Peso do aluno (KG)')
     aluno['idade'] = st.number_input("Idade", value=aluno.get("idade", 0))
-    idade = aluno['idade']
     sex = aluno.get("sex")
     altura = st.number_input('Altura do aluno (cm)', min_value=0)
     body_fat = st.number_input("Porcentagem de gordura corporal")
@@ -209,18 +210,18 @@ def avaliacao(professor):
                        'waist' : waist,
                        'hip' : hip,
                        'thigh' : thigh, 
-                       'idade' : idade, 
+                       'idade' : aluno['idade'], 
                        'sex' : sex, 
-                       'peso' : peso, 
+                       'peso' : aluno['peso'], 
                        'altura' : altura,
-                       'date' : last_datetime}
+                       'last' : last_datetime}
     
     if st.button('Confirmar avaliação'):
         coll2.insert_one(form_avaliação)
         coll1.update_one({"_id": aluno["_id"]}, {"$set": aluno})
         
         print("Documentos inseridos com sucesso")
-        st.success(f"✅ Usuário cadastrado com sucesso")
+        st.success(f"✅ Avaliação cadastrada com sucesso")
     
     return form_avaliação
 
@@ -286,3 +287,165 @@ def visualizar_aluno(professor):
     aluno['style'] = st.write(aluno.get("style"))
     st.markdown('**Tempo disponível por dia**')
     aluno['time'] = st.write(aluno.get("time"))
+
+def dash_prof(professor):
+    col1,col2 = st.columns(2)
+    alunos = coll1.find({"user": professor})
+    nomes_alunos = [aluno["student_name"] for aluno in alunos]
+    col1.metric('Alunos cadastrados', len(nomes_alunos))
+    avaliacoes = coll2.find({"user": professor})
+    avaliacoes_alunos = [aluno["student_name"] for aluno in avaliacoes]
+    col2.metric('Avaliações feitas', len(avaliacoes_alunos))
+    treinos = coll3.find({"user": professor})
+    treinos_alunos = [aluno["student"] for aluno in treinos]
+    col1.metric('Treinos com auxilio do AtlasAI 🌎', len(treinos_alunos))
+    analises = coll4.find({"user": professor})
+    analise_alunos = [analise["student"] for analise in analises]
+    col2.metric('Análises com auxilio do AtlasAI 🌎', len(analise_alunos))
+
+def avaliacao_alunos(student):
+    user = coll2.find({"student_name": student})
+    avaliacoes_alunos = [aluno["last"] for aluno in user]
+
+    if not avaliacoes_alunos:
+        st.info("Você ainda não possui avaliações.")
+        return
+
+    alunos = coll1.find_one({"student_name": student})
+    dados_aluno = alunos
+
+    st.header('**Ultima Avaliação**')
+    st.subheader("As métricas são as diferenças entre sua avaliação mais recente e a anterior")
+    st.divider()
+    avaliacao_recente = avaliacoes_alunos[-1]
+    avaliacao_atual = coll2.find_one({"last": avaliacao_recente, "student_name": student})
+    
+    if len(avaliacoes_alunos) >= 2:
+        avaliacao_comparacao = avaliacoes_alunos[-2]
+        avaliacao_anterior = coll2.find_one({"last": avaliacao_comparacao, "student_name": student})
+    else:
+        avaliacao_comparacao = avaliacao_recente
+        avaliacao_anterior = coll2.find_one({"last": avaliacao_comparacao, "student_name": student})
+
+    col1,col2,col3 = st.columns(3)
+    col1.metric("Idade", dados_aluno.get("idade"))
+
+    col2.metric('Peso(KG)', avaliacao_atual.get("peso"),delta=round((avaliacao_atual.get("peso") - avaliacao_anterior.get("peso")),2), delta_color="inverse")
+
+    col1.metric('Altura(cm)', dados_aluno.get("altura"))
+
+    col2.metric("Porcentagem de gordura corporal", avaliacao_atual.get("body_fat"),delta=round((avaliacao_atual.get("body_fat") - avaliacao_anterior.get("body_fat")),2), delta_color="inverse")
+    imc = round((avaliacao_atual.get("peso") / ((dados_aluno.get("altura")/100) * (dados_aluno.get("altura")/100))),2)
+    imc_anterior = round((avaliacao_anterior.get("peso") / ((dados_aluno.get("altura")/100) * (dados_aluno.get("altura")/100))),2)
+    col3.metric("IMC", imc, delta=round((imc - imc_anterior),2), delta_color="inverse")
+
+    st.header('Medidas Corporais')
+    col1,col2,col3 = st.columns(3)
+    col1.metric("Peito (cm)",avaliacao_atual.get("chest"), delta=round((avaliacao_atual.get("chest") - avaliacao_anterior.get("chest")),2), delta_color="inverse")
+    col2.metric("Braço (cm)",avaliacao_atual.get('shoulder'), delta=round((avaliacao_atual.get("shoulder") - avaliacao_anterior.get("shoulder")),2), delta_color="inverse")
+    col1.metric("Cintura (cm)",avaliacao_atual.get('waist'),delta=round((avaliacao_atual.get("waist") - avaliacao_anterior.get("waist")),2), delta_color="inverse")
+    col2.metric("Quadril (cm)",avaliacao_atual.get('hip'),delta=round((avaliacao_atual.get("hip") - avaliacao_anterior.get("hip")),2), delta_color="inverse")
+    col3.metric("Coxa (cm)",avaliacao_atual.get('thigh'),delta=round((avaliacao_atual.get("thigh") - avaliacao_anterior.get("thigh")),2), delta_color="inverse")
+
+    st.divider()
+    st.header('**Avaliações Anteriores**')
+    if st.toggle('Buscar avaliações anteriores:'):
+        avaliacao_selecionado = st.selectbox("Selecione uma avaliação", avaliacoes_alunos)
+        avaliacao = coll2.find_one({"last": avaliacao_selecionado, "student_name": student})
+        col1,col2,col3 = st.columns(3)
+        col1.metric("Idade", dados_aluno.get("idade"))
+        col2.metric('Peso(KG)', avaliacao.get("peso"))
+        col1.metric('Altura(cm)', dados_aluno.get("altura"))
+        col2.metric("Porcentagem de gordura corporal", avaliacao.get("body_fat"))
+        imc = round((avaliacao.get("peso") / ((dados_aluno.get("altura")/100) * (dados_aluno.get("altura")/100))),2)
+        col3.metric("IMC", imc)
+        st.header('Medidas Corporais')
+        col1,col2,col3 = st.columns(3)
+        col1.metric("Peito (cm)",avaliacao.get("chest"))
+        col2.metric("Braço (cm)",avaliacao.get('shoulder'))
+        col1.metric("Cintura (cm)",avaliacao.get('waist'))
+        col2.metric("Quadril (cm)",avaliacao.get('hip'))
+        col3.metric("Coxa (cm)",avaliacao.get('thigh'))
+    
+def treinos_alunos(student):
+    user = coll3.find({"student": student})
+    treinos_alunos = [aluno["date"] for aluno in user]
+
+    if not treinos_alunos:
+        st.info("Você ainda não possui treinos.")
+        return
+    
+    st.header('**TREINO ATUAL**')
+    st.divider()
+    data = treinos_alunos[-1]
+    ultimo_treino = coll3.find({"date": data, "student": student})
+    treino = [treino["treino"] for treino in ultimo_treino]
+    st.write(treino[0])
+
+    st.header('**TREINOS ANTERIORES**')
+    if st.toggle('Buscar treinos anteriores:'):
+        treino_selecionado = st.selectbox("Selecione um treino", treinos_alunos)
+        data_selecionada = coll3.find({"date": treino_selecionado, "student": student})
+        treino_selecionado = [treino_s["treino"] for treino_s in data_selecionada]
+        st.divider()
+        st.write(treino_selecionado[0])
+
+def dash_aluno(student):
+    alunos = coll1.find({"student_name": student})
+    nomes_alunos = [aluno for aluno in alunos]
+    
+    st.header('Dados corporais:')
+    col1,col2 = st.columns(2)
+    col1.metric("Idade", nomes_alunos[0].get("idade"))
+    col2.metric('Peso(KG)', nomes_alunos[0].get("peso"))
+    col1.metric('Altura(cm)', nomes_alunos[0].get("altura"))
+    col2.metric("Objetivo", nomes_alunos[0].get("objective"))
+    
+    st.header('Dados de saúde:')
+    col1,col2 = st.columns(2)
+    col1.metric("Lesões", nomes_alunos[0].get("lesoes"))
+    col2.metric("Doenças", nomes_alunos[0].get("doencas"))
+    col1.metric("Aprovação médica", nomes_alunos[0].get("medical_aprove"))
+    col2.metric("Medicamentos", nomes_alunos[0].get("medicines"))
+    col1.metric("Postura", nomes_alunos[0].get("postura"))
+
+    st.header('Outros dados:')
+    col1,col2,col3 = st.columns(3)
+    col1.metric("Experiência", nomes_alunos[0].get("experience"))
+    #col2.metric("Profissão", nomes_alunos[0].get("profession"))
+    #st.markdown("Rotina:")
+    #st.write(nomes_alunos[0].get("routine"))
+    
+    col2.metric("Frequência semanal", nomes_alunos[0].get("frequency"))
+    col3.metric("Duração por sessão", nomes_alunos[0].get("duration"))
+    #st.markdown("Equipamentos:")
+    #st.write(nomes_alunos[0].get("equipments"))
+    
+    col1.metric("Preferência de local", nomes_alunos[0].get("preferences"))
+    #col3.metric("Gosta / não gosta", nomes_alunos[0].get("like"))
+    #st.markdown("Experiência prévia:")
+    #st.write(nomes_alunos[0].get("exp"))
+    
+    col2.metric("Estilo de treino", nomes_alunos[0].get("style"))
+    col3.metric("Tempo disponível por dia", nomes_alunos[0].get("time"))
+
+def treino_manual(professor):
+
+    st.subheader('Área destinada à montagem de treinos sem o auxílio do AtlasAI 🌎')
+
+    from datetime import datetime
+    alunos = coll1.find({"user": professor})
+    nomes_alunos = [aluno["student_name"] for aluno in alunos]
+    student = st.selectbox('Aluno', nomes_alunos)
+    treino = st.text_area("Descreva o treino aqui:")
+
+    doc = {
+        "user": professor,
+        "student": student,
+        "treino": treino,
+        "date": datetime.now()
+    }
+
+    if st.button('Confirmar treino'):
+        coll3.insert_one(doc)
+        return st.success("Treino salvo com sucesso.")
