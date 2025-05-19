@@ -5,7 +5,7 @@ import urllib.parse
 from datetime import datetime
 import tempfile
 from utils.r2_utils import get_r2_client
-from utils.fomularios import forms_aluno,editar_aluno,avaliacao,visualizar_aluno,dash_prof,avaliacao_alunos,treinos_alunos,dash_aluno,treino_manual
+from utils.fomularios import forms_aluno,editar_aluno,avaliacao,visualizar_aluno,dash_prof,avaliacao_alunos,treinos_alunos,dash_aluno,treino_manual,pag_arquivos
 import uuid
 from services.chat_professor import AgentChat
 from langchain_core.prompts.chat import AIMessage
@@ -301,6 +301,9 @@ def show_personal_dashboard():
         if st.button("🤖🏃‍♂️‍➡️ Agent treinador"):
             st.session_state["pagina_atual"] = "agent"
 
+        if st.button("🗃️ Ajude o Atlas à aprender"):
+            st.session_state["pagina_atual"] = "uploader"
+
         if st.button("🏠 Voltar ao início"):
             st.session_state["pagina_atual"] = "home"
 
@@ -339,6 +342,11 @@ def show_personal_dashboard():
     elif st.session_state["pagina_atual"] == "treinos":
         st.title("💪 Monte o treino")
         treino_manual(st.session_state['name'])
+
+    elif st.session_state["pagina_atual"] == "uploader":
+        st.title("🗃️ Ajude o Atlas à aprender")
+        st.warning('Vídeos do youtube ainda não estão funcionando.')
+        pag_arquivos(st.session_state['name'])
 
     elif st.session_state["pagina_atual"] == "home":
         dash_prof(st.session_state['name'])
