@@ -4,6 +4,11 @@ import streamlit as st
 import urllib.parse
 from utils.createUsers import hash_passwords
 import datetime
+from utils.file_uploader import carrega_csv,carrega_pdf,carrega_site,carrega_txt,carrega_xlsx,carrega_youtube
+import tempfile
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_mongodb.vectorstores import MongoDBAtlasVectorSearch
 
 MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
@@ -18,6 +23,7 @@ coll1 = db.alunos
 coll2 = db.avaliação
 coll3 = db.treinos
 coll4 = db.jobs_fila
+coll5 = db.vetores
 
 def forms_aluno(professor):
     st.header("🧍‍♂️ Informações Pessoais Básicas")
@@ -50,11 +56,16 @@ def forms_aluno(professor):
     st.header("📈 Acompanhamento e Avaliação Física")
     body_fat = st.number_input("Porcentagem de gordura corporal")
     st.markdown("Medidas corporais básicas:")
-    chest = st.number_input("Peito (cm)",min_value=0, placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    shoulder = st.number_input("Braço (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    chest = st.number_input("Toráx (cm)",min_value=0, placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    shoulder1 = st.number_input("Braço direito(cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    shoulder2 = st.number_input("Braço esquerdo(cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    abdomen = st.number_input("Abdomen (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
     waist = st.number_input("Cintura (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
     hip = st.number_input("Quadril (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    thigh = st.number_input("Coxa (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    thigh1 = st.number_input("Coxa direita (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    thigh2 = st.number_input("Coxa esquerda (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    calf1 = st.number_input("Panturrilha direita (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    calf2 = st.number_input("Panturrilha esquerda (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
     last = st.date_input("Data da avaliação física")
     last_datetime = datetime.datetime.combine(last, datetime.time())
     style = st.text_input("Preferência de estilo de treino", placeholder= "Funcional, musculação, HIIT, mobilidade, etc.")
@@ -92,10 +103,15 @@ def forms_aluno(professor):
                        'student_name' : student_name,
                        'body_fat' : body_fat,
                        'chest' : chest,
-                       'shoulder' : shoulder,
+                       'shoulder1' : shoulder1,
+                       'shoulder2' : shoulder2,
                        'waist' : waist,
                        'hip' : hip,
-                       'thigh' : thigh, 
+                       'thigh1' : thigh1,
+                       'thigh2' : thigh2,
+                       'calf1' : calf1,
+                       'calf2' : calf2,
+                       'abdomen' : abdomen, 
                        'idade' : idade, 
                        'sex' : sex, 
                        'peso' : peso, 
@@ -194,11 +210,16 @@ def avaliacao(professor):
     sex = aluno.get("sex")
     altura = st.number_input('Altura do aluno (cm)', min_value=0)
     body_fat = st.number_input("Porcentagem de gordura corporal")
-    chest = st.number_input("Peito (cm)",min_value=0, placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    shoulder = st.number_input("Braço (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    chest = st.number_input("Torax (cm)",min_value=0, placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    shoulder1 = st.number_input("Braço direito(cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    shoulder2 = st.number_input("Braço esquerdo(cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    abdomen = st.number_input("Abdomen (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
     waist = st.number_input("Cintura (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
     hip = st.number_input("Quadril (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    thigh = st.number_input("Coxa (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    thigh1 = st.number_input("Coxa direita (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    thigh2 = st.number_input("Coxa esquerda (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    calf1 = st.number_input("Panturrilha direita (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
+    calf2 = st.number_input("Panturrilha esquerda (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
     last = datetime.date.today()
     last_datetime = datetime.datetime.combine(last, datetime.time())
 
@@ -206,10 +227,15 @@ def avaliacao(professor):
                        'student_name' : nome_selecionado,
                        'body_fat' : body_fat,
                        'chest' : chest,
-                       'shoulder' : shoulder,
+                       'shoulder1' : shoulder1,
+                       'shoulder2' : shoulder2,
                        'waist' : waist,
                        'hip' : hip,
-                       'thigh' : thigh, 
+                       'thigh1' : thigh1,
+                       'thigh2' : thigh2,
+                       'calf1' : calf1,
+                       'calf2' : calf2,
+                       'abdomen' : abdomen, 
                        'idade' : aluno['idade'], 
                        'sex' : sex, 
                        'peso' : aluno['peso'], 
@@ -340,12 +366,18 @@ def avaliacao_alunos(student):
     col3.metric("IMC", imc, delta=round((imc - imc_anterior),2), delta_color="inverse")
 
     st.header('Medidas Corporais')
-    col1,col2,col3 = st.columns(3)
-    col1.metric("Peito (cm)",avaliacao_atual.get("chest"), delta=round((avaliacao_atual.get("chest") - avaliacao_anterior.get("chest")),2), delta_color="inverse")
-    col2.metric("Braço (cm)",avaliacao_atual.get('shoulder'), delta=round((avaliacao_atual.get("shoulder") - avaliacao_anterior.get("shoulder")),2), delta_color="inverse")
-    col1.metric("Cintura (cm)",avaliacao_atual.get('waist'),delta=round((avaliacao_atual.get("waist") - avaliacao_anterior.get("waist")),2), delta_color="inverse")
+    col1,col2 = st.columns(2)
+    col1.metric("Toráx (cm)",avaliacao_atual.get("chest"), delta=round((avaliacao_atual.get("chest") - avaliacao_anterior.get("chest")),2), delta_color="inverse")
+    col2.metric("Abdomen (cm)",avaliacao_atual.get('waist'),delta=round((avaliacao_atual.get("waist") - avaliacao_anterior.get("abdomen")),2), delta_color="inverse")
+    col1.metric("Cintura (cm)",avaliacao_atual.get('waist'),delta=round((avaliacao_atual.get("waist") - avaliacao_anterior.get("abdomen")),2), delta_color="inverse")
     col2.metric("Quadril (cm)",avaliacao_atual.get('hip'),delta=round((avaliacao_atual.get("hip") - avaliacao_anterior.get("hip")),2), delta_color="inverse")
-    col3.metric("Coxa (cm)",avaliacao_atual.get('thigh'),delta=round((avaliacao_atual.get("thigh") - avaliacao_anterior.get("thigh")),2), delta_color="inverse")
+    col1.metric("Braço direito (cm)",avaliacao_atual.get('shoulder1'), delta=round((avaliacao_atual.get("shoulder1") - avaliacao_anterior.get("shoulder1")),2), delta_color="inverse")
+    col2.metric("Braço esquerdo (cm)",avaliacao_atual.get('shoulder2'), delta=round((avaliacao_atual.get("shoulder2") - avaliacao_anterior.get("shoulder2")),2), delta_color="inverse")
+    col1.metric("Coxa direita (cm)",avaliacao_atual.get('thigh1'),delta=round((avaliacao_atual.get("thigh1") - avaliacao_anterior.get("thigh1")),2), delta_color="inverse")
+    col2.metric("Coxa esquerda (cm)",avaliacao_atual.get('thigh1'),delta=round((avaliacao_atual.get("thigh2") - avaliacao_anterior.get("thigh2")),2), delta_color="inverse")
+    col1.metric("Panturrilha direita (cm)",avaliacao_atual.get('calf1'),delta=round((avaliacao_atual.get("calf1") - avaliacao_anterior.get("calf1")),2), delta_color="inverse")
+    col2.metric("Panturrilha esquerda (cm)",avaliacao_atual.get('calf2'),delta=round((avaliacao_atual.get("calf2") - avaliacao_anterior.get("calf2")),2), delta_color="inverse")
+
 
     st.divider()
     st.header('**Avaliações Anteriores**')
@@ -361,11 +393,16 @@ def avaliacao_alunos(student):
         col3.metric("IMC", imc)
         st.header('Medidas Corporais')
         col1,col2,col3 = st.columns(3)
-        col1.metric("Peito (cm)",avaliacao.get("chest"))
-        col2.metric("Braço (cm)",avaliacao.get('shoulder'))
+        col1.metric("Toráx (cm)",avaliacao.get("chest"))
+        col2.metric("Abdomen (cm)",avaliacao.get('waist'))
         col1.metric("Cintura (cm)",avaliacao.get('waist'))
         col2.metric("Quadril (cm)",avaliacao.get('hip'))
-        col3.metric("Coxa (cm)",avaliacao.get('thigh'))
+        col1.metric("Braço direito (cm)",avaliacao.get('shoulder1'))
+        col2.metric("Braço esquerdo (cm)",avaliacao.get('shoulder2'))
+        col1.metric("Coxa direita (cm)",avaliacao.get('thigh1'))
+        col2.metric("Coxa esquerda (cm)",avaliacao.get('thigh2'))
+        col1.metric("Panturrilha direita (cm)",avaliacao.get('calf1)'))
+        col2.metric("Panturrilha esquerda (cm)",avaliacao.get('calf2'))
     
 def treinos_alunos(student):
     user = coll3.find({"student": student})
@@ -449,3 +486,72 @@ def treino_manual(professor):
     if st.button('Confirmar treino'):
         coll3.insert_one(doc)
         return st.success("Treino salvo com sucesso.")
+    
+def carrega_arquivo(tipo_arquivo, arquivo):
+    if tipo_arquivo == 'Site':
+        documento = carrega_site(arquivo)
+    if tipo_arquivo == 'Vídeo Youtube':
+        documento = carrega_youtube(arquivo)
+    if tipo_arquivo == 'PDF':
+        with tempfile.NamedTemporaryFile(suffix= '.pdf', delete=False) as temp:
+            temp.write(arquivo.read())
+            nome_temp = temp.name
+        documento = carrega_pdf(nome_temp)
+    if tipo_arquivo == 'CSV':
+        with tempfile.NamedTemporaryFile(suffix= '.csv', delete=False) as temp:
+            temp.write(arquivo.read())
+            nome_temp = temp.name
+        documento = carrega_csv(nome_temp)
+    if tipo_arquivo == 'EXCEL':
+        with tempfile.NamedTemporaryFile(suffix= '.xlsx', delete=False) as temp:
+            temp.write(arquivo.read())
+            nome_temp = temp.name
+        documento = carrega_xlsx(nome_temp)
+    if tipo_arquivo == 'Texto':
+        with tempfile.NamedTemporaryFile(suffix= '.docx', delete=False) as temp:
+            temp.write(arquivo.read())
+            nome_temp = temp.name
+        documento = carrega_txt(nome_temp)
+    return documento
+
+def pag_arquivos(professor):
+    ARQUIVOS = ['Site', 'Vídeo Youtube', 'PDF', 'CSV', 'EXCEL', 'Texto']
+    tipo = st.selectbox('Selecione o tipo de arquivo', ARQUIVOS)
+    if tipo == 'Site':
+        arquivo = st.text_input('Passe o link do site')
+    if tipo == 'Vídeo Youtube':
+        arquivo = st.text_input('Passe o link do vídeo')
+    if tipo == 'PDF':
+        arquivo = st.file_uploader('Faça o upload do PDF', type= ['.pdf'])#, accept_multiple_files= True)
+    if tipo == 'CSV':
+        arquivo = st.file_uploader('Faça o upload do CSV', type= ['.csv'])#, accept_multiple_files= True)
+    if tipo == 'EXCEL':
+        arquivo = st.file_uploader('Faça o upload do Excel', type= ['.xlsx'])#, accept_multiple_files= True)
+    if tipo == 'Texto':
+        arquivo = st.file_uploader('Faça o upload de texto', type= ['.docx'])#, accept_multiple_files= True)
+
+    if arquivo:
+        if st.button('Carregar arquivo'):
+            with st.spinner('Carregando...'):
+                doc = carrega_arquivo(tipo, arquivo)
+
+                chunk_size = 500
+                chunk_overlap = 50
+
+                char_split = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                separators=['\n\n', '\n', '.', ' ', '']
+                )
+
+                arquivo = char_split.split_documents(doc)
+                embedding_model = OpenAIEmbeddings(api_key=st.secrets["OPENAI_API_KEY"], model="text-embedding-3-large")
+
+                vector_store = MongoDBAtlasVectorSearch.from_documents(
+                documents=arquivo,
+                embedding=embedding_model,
+                collection=coll5,
+                index_name="default"
+            )
+            
+            st.success('Arquivo carregado com sucesso')
