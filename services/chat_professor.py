@@ -18,15 +18,19 @@ import boto3
 from pymongo import MongoClient
 import urllib.parse
 from io import BytesIO
+from langchain_openai import OpenAIEmbeddings
+from langchain_mongodb.vectorstores import MongoDBAtlasVectorSearch
 
 MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
+embedding_model = OpenAIEmbeddings(api_key=st.secrets["OPENAI_API_KEY"], model="text-embedding-3-large")
 client = MongoClient("mongodb+srv://%s:%s@cluster0.gjkin5a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0" % (MONGO_USER, MONGO_PASS))
 db = client.personalAI
 coll = db.memoria_chat
 coll2 = db.alunos
 coll3 = db.treinos
 coll4 = db.avaliação
+coll5 = db.vetores
 
 #DB_PATH1 = "memoria_chatbot2.db"
 
@@ -46,17 +50,19 @@ R2_SECRET_KEY = st.secrets['R2_SECRET_KEY']
 BUCKET = 'personalai'
 
 documento = carrega_txt(caminho)
+backup = """Você tem acesso ao seguinte documento como referência principal para suas respostas:
+
+####
+{}
+####"""
 
 SYSTEM_PROMPT = """
 🧠 Backstory:
 Você é Atlas, o assistente digital oficial da plataforma de análise de exercícios da **CamppoAI Solutions**. Seu papel é apoiar personal trainers no uso da plataforma, ajudando a interpretar relatórios, tirar dúvidas, sugerir boas práticas e mostrar como a IA pode facilitar o acompanhamento dos alunos.
 
 📚 Fonte de informação:
-Você tem acesso ao seguinte documento como referência principal para suas respostas:
+Para passar informações mais precisas você utiliza a função consultar_material_de_apoio para buscar na sua base de conhecimento
 
-####
-{}
-####
 
 🎯 Diretrizes de comportamento:
 - Sempre mantenha um **tom amigável, confiante e acessível**, como um parceiro de trabalho experiente.
@@ -74,17 +80,30 @@ Você tem acesso ao seguinte documento como referência principal para suas resp
 - Caso o usuário pergunte sobre temas fora da plataforma (como musculação geral, dieta ou treinos específicos), oriente gentilmente que seu foco é no suporte ao uso da plataforma CamppoAI.
 
 📋 Fluxo para geração de planos de treino:
-1. Sempre pergunte antes: **"Esse plano é para um aluno específico?"**
+1. Sempre que o usuário mencionar que deseja um treino, **interrompa o fluxo e pergunte se é para um aluno específico.** Não prossiga até obter essa resposta.
 2. Se sim:
    - Solicite o **nome do aluno**.
    - Acesse os dados do aluno no banco de dados usando a função apropriada.
 3. Só então prossiga com as perguntas: objetivo, nível, frequência e equipamentos.
 4. Personalize as sugestões com base nas informações do aluno.
+5. Após finalizar a sugestão de treino, sempre pergunte: "Você quer adicionar algum aquecimento ou alongamento específico antes ou depois do treino?"
+6. Quando for montar um treino, **sempre gere a divisão e os exercícios de cada dia juntos**. O plano de treino deve ser enviado completo, sem etapas intermediárias.
 
 💬 Exemplo de saudação:
 "E aí, Personal! 👊 Eu sou o Atlas, seu assistente digital da CamppoAI Solutions. Tô aqui pra te ajudar a tirar o máximo da nossa plataforma de análise de exercícios. Me conta, o que você precisa hoje?"
 """
 
+@tool("consultar_material_de_apoio")
+def consultar_material_de_apoio(pergunta: str) -> str:
+    """
+    Consulta o material de apoio técnico enviado pelos personal trainers para responder perguntas específicas.
+    """
+    vectorStore = MongoDBAtlasVectorSearch(coll5, embedding=embedding_model, index_name='default')
+    docs = vectorStore.similarity_search(pergunta)
+    if not docs:
+        return "Nenhum conteúdo relevante encontrado no material de apoio."
+    
+    return "\n\n".join([doc.page_content[:400] for doc in docs])
 
 @tool('get_user')
 def get_user_by_name(name: str) -> dict:
@@ -233,7 +252,7 @@ def get_evolution_feedback(student_name: str, user: str) -> str:
     return header + "\n".join(feedback)
 
 
-tools = [gerar_treino_personalizado, gerar_pdf_treino,salvar_treino,get_user_by_name,get_evolution_feedback]
+tools = [gerar_treino_personalizado, gerar_pdf_treino,salvar_treino,get_user_by_name,get_evolution_feedback,consultar_material_de_apoio]
 tool_executor = ToolNode(tools)
 llm = ChatOpenAI(model="gpt-4o-mini",openai_api_key=OPENAI_API_KEY, streaming=True)
 memory = MongoDBSaver(coll)
