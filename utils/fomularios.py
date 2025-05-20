@@ -116,7 +116,7 @@ def forms_aluno(professor):
                        'sex' : sex, 
                        'peso' : peso, 
                        'altura' : altura,
-                       'date' : last_datetime}
+                       'last' : last_datetime}
     
     hash_passwords(password)
     hashed_passwords = hash_passwords(password)
