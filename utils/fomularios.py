@@ -205,10 +205,10 @@ def avaliacao(professor):
         return
     
     
-    aluno['peso'] = st.number_input('Peso do aluno (KG)')
+    aluno['peso'] = st.number_input('Peso do aluno (KG)',value=aluno.get("peso", 0))
     aluno['idade'] = st.number_input("Idade", value=aluno.get("idade", 0))
     sex = aluno.get("sex")
-    altura = st.number_input('Altura do aluno (cm)', min_value=0)
+    altura = st.number_input('Altura do aluno (cm)', value=aluno.get("altura", 0))
     body_fat = st.number_input("Porcentagem de gordura corporal")
     chest = st.number_input("Torax (cm)",min_value=0, placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
     shoulder1 = st.number_input("Braço direito(cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
@@ -244,7 +244,13 @@ def avaliacao(professor):
     
     if st.button('Confirmar avaliação'):
         coll2.insert_one(form_avaliação)
-        coll1.update_one({"_id": aluno["_id"]}, {"$set": aluno})
+        campos_para_atualizar = {
+            "peso": aluno["peso"],
+            "idade": aluno["idade"],
+            "altura": aluno["altura"]
+            # Adicione outros campos, se quiser
+        }
+        coll1.update_one({"_id": aluno["_id"]}, {"$set": campos_para_atualizar})
         
         print("Documentos inseridos com sucesso")
         st.success(f"✅ Avaliação cadastrada com sucesso")
