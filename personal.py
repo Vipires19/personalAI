@@ -115,7 +115,7 @@ def analise_exec(student_name):
 
     st.divider()
     st.subheader("📊 Minhas Análises")
-    jobs = coll_jobs.find({"user": st.session_state['name']}).sort("created_at", -1)
+    jobs = coll_jobs.find({"user": st.session_state['username']}).sort("created_at", -1)
     
     for job in jobs:
         created_at = job.get("created_at")
