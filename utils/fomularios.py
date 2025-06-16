@@ -2,13 +2,18 @@ import streamlit as st
 from pymongo import MongoClient
 import streamlit as st
 import urllib.parse
-from utils.createUsers import hash_passwords
-import datetime
+#from utils.createUsers import hash_passwords
+import streamlit_authenticator as stauth
+from datetime import datetime
 from utils.file_uploader import carrega_csv,carrega_pdf,carrega_site,carrega_txt,carrega_xlsx,carrega_youtube
+from utils.comp_corp import pollock_7_dobras,pollock_3_dobras,percentual_gordura_durnin_womersley,faulkner
 import tempfile
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings,ChatOpenAI
 from langchain_mongodb.vectorstores import MongoDBAtlasVectorSearch
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema import HumanMessage
+
 
 MONGO_USER = urllib.parse.quote_plus(st.secrets['MONGO_USER'])
 MONGO_PASS = urllib.parse.quote_plus(st.secrets['MONGO_PASS'])
@@ -24,6 +29,7 @@ coll2 = db.avaliação
 coll3 = db.treinos
 coll4 = db.jobs_fila
 coll5 = db.vetores
+coll6 = db.feedback
 
 def forms_aluno(professor):
     st.header("🧍‍♂️ Informações Pessoais Básicas")
@@ -116,10 +122,10 @@ def forms_aluno(professor):
                        'sex' : sex, 
                        'peso' : peso, 
                        'altura' : altura,
-                       'last' : last_datetime}
+                       'date' : last_datetime}
     
-    hash_passwords(password)
-    hashed_passwords = hash_passwords(password)
+
+    hashed_passwords = stauth.Hasher([password]).generate()
 
     new_user = {
     "name": student_name,
@@ -209,39 +215,271 @@ def avaliacao(professor):
     aluno['idade'] = st.number_input("Idade", value=aluno.get("idade", 0))
     sex = aluno.get("sex")
     altura = st.number_input('Altura do aluno (cm)', value=aluno.get("altura", 0))
-    body_fat = st.number_input("Porcentagem de gordura corporal")
-    chest = st.number_input("Torax (cm)",min_value=0, placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    shoulder1 = st.number_input("Braço direito(cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    shoulder2 = st.number_input("Braço esquerdo(cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    abdomen = st.number_input("Abdomen (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    waist = st.number_input("Cintura (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    hip = st.number_input("Quadril (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    thigh1 = st.number_input("Coxa direita (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    thigh2 = st.number_input("Coxa esquerda (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    calf1 = st.number_input("Panturrilha direita (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    calf2 = st.number_input("Panturrilha esquerda (cm)",min_value=0,placeholder='Utilize . inves de , caso numero quebrado. EX: 81.2')
-    last = datetime.date.today()
-    last_datetime = datetime.datetime.combine(last, datetime.time())
+    #body_muscle = st.number_input("Porcentagem de massa magra")
+    st.divider()
+    st.header("Perimetria")
+    chest = st.number_input("Torax (cm)",min_value=0)
+    abdomen = st.number_input("Abdomen (cm)",min_value=0)
+    waist = st.number_input("Cintura (cm)",min_value=0)
+    hip = st.number_input("Quadril (cm)",min_value=0)
+    shoulder1_relax = st.number_input("Braço direito relaxado(cm)",min_value=0)
+    shoulder1_contract = st.number_input("Braço direito contraído(cm)",min_value=0)
+    shoulder1_braquio = st.number_input("Antebraço direito(cm)",min_value=0)
+    shoulder2_relax = st.number_input("Braço esquerdo relaxado(cm)",min_value=0)
+    shoulder2_contract = st.number_input("Braço esquerdo contraído(cm)",min_value=0)
+    shoulder2_braquio = st.number_input("Antebraço esquerdo(cm)",min_value=0)
+    thigh1 = st.number_input("Coxa direita (cm)",min_value=0)
+    thigh2 = st.number_input("Coxa esquerda (cm)",min_value=0)
+    calf1 = st.number_input("Panturrilha direita (cm)",min_value=0)
+    calf2 = st.number_input("Panturrilha esquerda (cm)",min_value=0)
+    last = datetime.utcnow()
+    st.divider()
+    st.header('Avaliação de composição corporal')
 
-    form_avaliação = {'user' : professor,
-                       'student_name' : nome_selecionado,
-                       'body_fat' : body_fat,
-                       'chest' : chest,
-                       'shoulder1' : shoulder1,
-                       'shoulder2' : shoulder2,
-                       'waist' : waist,
-                       'hip' : hip,
-                       'thigh1' : thigh1,
-                       'thigh2' : thigh2,
-                       'calf1' : calf1,
-                       'calf2' : calf2,
-                       'abdomen' : abdomen, 
-                       'idade' : aluno['idade'], 
-                       'sex' : sex, 
-                       'peso' : aluno['peso'], 
-                       'altura' : altura,
-                       'last' : last_datetime}
+    protocols = ["Pollock 7 dobras", "Pollock 3 dobras", "Faulkner", "Durnin & Womersley"]
+    protocol = st.selectbox("Selecione um protocolo", protocols)
+
+    if protocol == "Pollock 7 dobras":
+        triciptal = st.number_input("Tricipital (mm)",min_value=0)
+        peitoral = st.number_input("Peitoral (mm)",min_value=0)
+        subescapular = st.number_input("Subescapular (mm)",min_value=0)
+        axilar_media = st.number_input("Axilar média (mm)",min_value=0)
+        suprailiaca = st.number_input("Suprailiaca (mm)",min_value=0)
+        abdominal = st.number_input("Abdominal (mm)",min_value=0)
+        coxa_media = st.number_input("Coxa média (mm)",min_value=0)
     
+        dobras = {
+            "triciptal": triciptal,
+            "peitoral": peitoral,
+            "subescapular": subescapular,
+            "axilar_media": axilar_media,
+            "suprailiaca": suprailiaca,
+            "abdominal": abdominal,
+            "coxa_media": coxa_media
+        }
+
+        fat_percent = pollock_7_dobras(dobras, aluno['idade'], sex)
+        muscle_percent = 100 - fat_percent
+        body_muscle = aluno['peso'] * (1 - (fat_percent / 100))
+        body_fat = aluno['peso'] - body_muscle
+
+        form_avaliação = {'user' : professor,
+                        'student_name' : nome_selecionado,
+                        'body_fat' : body_fat,
+                        'body_muscle' : body_muscle,
+                        'fat_percent' : fat_percent,
+                        'muscle_percent' : muscle_percent,
+                        'chest' : chest,
+                        'shoulder1_relax' : shoulder1_relax,
+                        'shoulder1_contract' : shoulder1_contract,
+                        'shoulder1_braquio' : shoulder1_braquio,
+                        'shoulder2_relax' : shoulder2_relax,
+                        'shoulder2_contract' : shoulder2_contract,
+                        'shoulder2_braquio' : shoulder2_braquio,
+                        'waist' : waist,
+                        'hip' : hip,
+                        'thigh1' : thigh1,
+                        'thigh2' : thigh2,
+                        'calf1' : calf1,
+                        'calf2' : calf2,
+                        'abdomen' : abdomen,
+                        'protocolo' : protocol,
+                        'triciptal' : triciptal,
+                        'peitoral' : peitoral,
+                        'subescapular' : subescapular,
+                        'axilar_media' : axilar_media,
+                        'suprailiaca' : suprailiaca,
+                        'abdominal' : abdominal,
+                        'coxa_media' : coxa_media, 
+                        'idade' : aluno['idade'], 
+                        'sex' : sex, 
+                        'peso' : aluno['peso'], 
+                        'altura' : altura,
+                        'last' : last}
+
+    if protocol == "Pollock 3 dobras":
+        if sex == "Masculino":
+            peitoral = st.number_input("Peitoral (mm)",min_value=0)
+            abdominal = st.number_input("Abdominal (mm)",min_value=0)
+            coxa_anterior = st.number_input("Coxa anterior (mm)",min_value=0)
+
+            dobras = {
+            "peitoral": peitoral,
+            "abdominal": abdominal,
+            "coxa_anterior": coxa_anterior}
+
+            fat_percent = pollock_3_dobras(dobras,aluno['idade'],sex)
+            muscle_percent = 100 - fat_percent
+            body_muscle = aluno['peso'] * (1 - (fat_percent / 100))
+            body_fat = aluno['peso'] - body_muscle
+
+            form_avaliação = {'user' : professor,
+                            'student_name' : nome_selecionado,
+                            'body_fat' : body_fat,
+                            'body_muscle' : body_muscle,
+                            'muscle_percent' : muscle_percent,
+                            'fat_percent' : fat_percent,
+                            'chest' : chest,
+                            'shoulder1_relax' : shoulder1_relax,
+                            'shoulder1_contract' : shoulder1_contract,
+                            'shoulder1_braquio' : shoulder1_braquio,
+                            'shoulder2_relax' : shoulder2_relax,
+                            'shoulder2_contract' : shoulder2_contract,
+                            'shoulder2_braquio' : shoulder2_braquio,
+                            'waist' : waist,
+                            'hip' : hip,
+                            'thigh1' : thigh1,
+                            'thigh2' : thigh2,
+                            'calf1' : calf1,
+                            'calf2' : calf2,
+                            'abdomen' : abdomen,
+                            'protocolo' : protocol,
+                            'peitoral' : peitoral,
+                            'abdominal' : abdominal,
+                            'coxa_anterior' : coxa_anterior,  
+                            'idade' : aluno['idade'], 
+                            'sex' : sex, 
+                            'peso' : aluno['peso'], 
+                            'altura' : altura,
+                            'last' : last}
+        
+        if sex == "Feminino":
+            triciptal = st.number_input("Tricipital (mm)",min_value=0)
+            suprailiaca = st.number_input("Supra-ilíaca (mm)",min_value=0)
+            coxa_anterior = st.number_input("Coxa anterior (mm)",min_value=0)
+    
+            dobras = {
+            "triciptal": triciptal,
+            "suprailiaca": suprailiaca,
+            "coxa_anterior": coxa_anterior}
+
+            fat_percent = pollock_3_dobras(dobras,aluno['idade'],sex)
+            muscle_percent = 100 - fat_percent
+            body_muscle = aluno['peso'] * (1 - (fat_percent / 100))
+            body_fat = aluno['peso'] - body_muscle
+
+
+            form_avaliação = {'user' : professor,
+                            'student_name' : nome_selecionado,
+                            'body_fat' : body_fat,
+                            'body_muscle' : body_muscle,
+                            'fat_percent' : fat_percent,
+                            'muscle_percent' : muscle_percent,
+                            'chest' : chest,
+                            'shoulder1_relax' : shoulder1_relax,
+                            'shoulder1_contract' : shoulder1_contract,
+                            'shoulder1_braquio' : shoulder1_braquio,
+                            'shoulder2_relax' : shoulder2_relax,
+                            'shoulder2_contract' : shoulder2_contract,
+                            'shoulder2_braquio' : shoulder2_braquio,
+                            'waist' : waist,
+                            'hip' : hip,
+                            'thigh1' : thigh1,
+                            'thigh2' : thigh2,
+                            'calf1' : calf1,
+                            'calf2' : calf2,
+                            'abdomen' : abdomen,
+                            'protocolo' : protocol,
+                            'peitoral' : peitoral,
+                            'suprailiaca' : suprailiaca,
+                            'coxa_anterior' : coxa_anterior,  
+                            'idade' : aluno['idade'], 
+                            'sex' : sex, 
+                            'peso' : aluno['peso'], 
+                            'altura' : altura,
+                            'last' : last}
+
+    if protocol == "Faulkner":
+        triciptal = st.number_input("Tricipital (mm)",min_value=0)
+        subescapular = st.number_input("Subescapular (mm)",min_value=0)
+        suprailiaca = st.number_input("Suprailiaca (mm)",min_value=0)
+        abdominal = st.number_input("Abdominal (mm)",min_value=0)
+        
+        dobras = {
+            "triciptal": triciptal,            
+            "subescapular": subescapular,
+            "suprailiaca": suprailiaca,
+            "abdominal": abdominal,
+        }
+
+        fat_percent = pollock_7_dobras(dobras)
+        muscle_percent = 100 - fat_percent
+        body_muscle = aluno['peso'] * (1 - (fat_percent / 100))
+        body_fat = aluno['peso'] - body_muscle
+
+        form_avaliação = {'user' : professor,
+                        'student_name' : nome_selecionado,
+                        'body_fat' : body_fat,
+                        'body_muscle' : body_muscle,
+                        'fat_percent' : fat_percent,
+                        'muscle_percent' : muscle_percent,
+                        'chest' : chest,
+                        'shoulder1_relax' : shoulder1_relax,
+                        'shoulder1_contract' : shoulder1_contract,
+                        'shoulder1_braquio' : shoulder1_braquio,
+                        'shoulder2_relax' : shoulder2_relax,
+                        'shoulder2_contract' : shoulder2_contract,
+                        'shoulder2_braquio' : shoulder2_braquio,
+                        'waist' : waist,
+                        'hip' : hip,
+                        'thigh1' : thigh1,
+                        'thigh2' : thigh2,
+                        'calf1' : calf1,
+                        'calf2' : calf2,
+                        'abdomen' : abdomen,
+                        'protocolo' : protocol,
+                        'triciptal' : triciptal,
+                        'subescapular' : subescapular,
+                        'suprailiaca' : suprailiaca,
+                        'abdominal' : abdominal, 
+                        'idade' : aluno['idade'], 
+                        'sex' : sex, 
+                        'peso' : aluno['peso'], 
+                        'altura' : altura,
+                        'last' : last}
+        
+    if protocol == "Durnin & Womersley":
+        biciptal = st.number_input("Bíceps (mm)",min_value=0)
+        triciptal = st.number_input("Tríceps (mm)",min_value=0) 
+        subescapular = st.number_input("Subescapular (mm)",min_value=0)
+        suprailiaca = st.number_input("Suprailiaca (mm)",min_value=0)
+        
+        fat_percent = percentual_gordura_durnin_womersley(biciptal, triciptal, subescapular, suprailiaca, aluno['idade'], sex)
+        muscle_percent = 100 - fat_percent
+        body_muscle = aluno['peso'] * (1 - (fat_percent / 100))
+        body_fat = aluno['peso'] - body_muscle
+
+        form_avaliação = {'user' : professor,
+                        'student_name' : nome_selecionado,
+                        'body_fat' : body_fat,
+                        'body_muscle' : body_muscle,
+                        'muscle_percent' : muscle_percent,
+                        'fat_percent' : fat_percent,
+                        'chest' : chest,
+                        'shoulder1_relax' : shoulder1_relax,
+                        'shoulder1_contract' : shoulder1_contract,
+                        'shoulder1_braquio' : shoulder1_braquio,
+                        'shoulder2_relax' : shoulder2_relax,
+                        'shoulder2_contract' : shoulder2_contract,
+                        'shoulder2_braquio' : shoulder2_braquio,
+                        'waist' : waist,
+                        'hip' : hip,
+                        'thigh1' : thigh1,
+                        'thigh2' : thigh2,
+                        'calf1' : calf1,
+                        'calf2' : calf2,
+                        'abdomen' : abdomen,
+                        'protocolo' : protocol,
+                        'triciptal' : triciptal,
+                        'subescapular' : subescapular,
+                        'suprailiaca' : suprailiaca,
+                        'biciptal' : biciptal, 
+                        'idade' : aluno['idade'], 
+                        'sex' : sex, 
+                        'peso' : aluno['peso'], 
+                        'altura' : altura,
+                        'last' : last}
+        
     if st.button('Confirmar avaliação'):
         coll2.insert_one(form_avaliação)
         campos_para_atualizar = {
@@ -251,10 +489,10 @@ def avaliacao(professor):
             # Adicione outros campos, se quiser
         }
         coll1.update_one({"_id": aluno["_id"]}, {"$set": campos_para_atualizar})
-        
+            
         print("Documentos inseridos com sucesso")
         st.success(f"✅ Avaliação cadastrada com sucesso")
-    
+        
     return form_avaliação
 
 def visualizar_aluno(professor):
@@ -362,28 +600,76 @@ def avaliacao_alunos(student):
     col1,col2,col3 = st.columns(3)
     col1.metric("Idade", dados_aluno.get("idade"))
 
-    col2.metric('Peso(KG)', avaliacao_atual.get("peso"),delta=round((avaliacao_atual.get("peso") - avaliacao_anterior.get("peso")),2), delta_color="inverse")
+    col2.metric('Altura(cm)', dados_aluno.get("altura"))
+    
+    col3.metric('Peso(KG)', avaliacao_atual.get("peso"),delta=round((avaliacao_atual.get("peso") - avaliacao_anterior.get("peso")),2), delta_color="inverse")
 
-    col1.metric('Altura(cm)', dados_aluno.get("altura"))
+    col1.metric("Quantidade de gordura corporal", f'{round(avaliacao_atual.get("body_fat"),2)} KG',delta=round((avaliacao_atual.get("body_fat") - avaliacao_anterior.get("body_fat")),2), delta_color="inverse")
+    col1.metric("Porcentagem de gordura corporal", f'{round(avaliacao_atual.get("fat_percent"),2)} %',delta=round((avaliacao_atual.get("fat_percent") - avaliacao_anterior.get("fat_percent")),2), delta_color="inverse")
+    
+    col2.metric("Quantidade de massa magra", f'{round(avaliacao_atual.get("body_muscle"),2)} KG',delta=round((avaliacao_atual.get("body_muscle") - avaliacao_anterior.get("body_muscle")),2))
+    col2.metric("Porcentagem de massa magra", f'{round(avaliacao_atual.get("muscle_percent"),2)} %',delta=round((avaliacao_atual.get("muscle_percent") - avaliacao_anterior.get("muscle_percent")),2))
 
-    col2.metric("Porcentagem de gordura corporal", avaliacao_atual.get("body_fat"),delta=round((avaliacao_atual.get("body_fat") - avaliacao_anterior.get("body_fat")),2), delta_color="inverse")
     imc = round((avaliacao_atual.get("peso") / ((dados_aluno.get("altura")/100) * (dados_aluno.get("altura")/100))),2)
     imc_anterior = round((avaliacao_anterior.get("peso") / ((dados_aluno.get("altura")/100) * (dados_aluno.get("altura")/100))),2)
     col3.metric("IMC", imc, delta=round((imc - imc_anterior),2), delta_color="inverse")
 
     st.header('Medidas Corporais')
-    col1,col2 = st.columns(2)
+    col1,col2, col3 = st.columns(3)
     col1.metric("Toráx (cm)",avaliacao_atual.get("chest"), delta=round((avaliacao_atual.get("chest") - avaliacao_anterior.get("chest")),2), delta_color="inverse")
-    col2.metric("Abdomen (cm)",avaliacao_atual.get('waist'),delta=round((avaliacao_atual.get("waist") - avaliacao_anterior.get("abdomen")),2), delta_color="inverse")
+    col2.metric("Abdomen (cm)",avaliacao_atual.get('abdomen'),delta=round((avaliacao_atual.get("abdomen") - avaliacao_anterior.get("abdomen")),2), delta_color="inverse")
     col1.metric("Cintura (cm)",avaliacao_atual.get('waist'),delta=round((avaliacao_atual.get("waist") - avaliacao_anterior.get("abdomen")),2), delta_color="inverse")
     col2.metric("Quadril (cm)",avaliacao_atual.get('hip'),delta=round((avaliacao_atual.get("hip") - avaliacao_anterior.get("hip")),2), delta_color="inverse")
-    col1.metric("Braço direito (cm)",avaliacao_atual.get('shoulder1'), delta=round((avaliacao_atual.get("shoulder1") - avaliacao_anterior.get("shoulder1")),2), delta_color="inverse")
-    col2.metric("Braço esquerdo (cm)",avaliacao_atual.get('shoulder2'), delta=round((avaliacao_atual.get("shoulder2") - avaliacao_anterior.get("shoulder2")),2), delta_color="inverse")
+    
+    col1.metric("Braço direito relaxado (cm)",avaliacao_atual.get('shoulder1_relax'), delta=round((avaliacao_atual.get("shoulder1_relax") - avaliacao_anterior.get("shoulder1_relax")),2), delta_color="inverse")
+    col2.metric("Braço direito contraído (cm)",avaliacao_atual.get('shoulder1_contract'), delta=round((avaliacao_atual.get("shoulder1_contract") - avaliacao_anterior.get("shoulder1_contract")),2), delta_color="inverse")
+    col3.metric("Antebraço direito (cm)",avaliacao_atual.get('shoulder1_braquio'), delta=round((avaliacao_atual.get("shoulder1_braquio") - avaliacao_anterior.get("shoulder1_braquio")),2), delta_color="inverse")
+    
+    col1.metric("Braço esquerdo relaxado (cm)",avaliacao_atual.get('shoulder1_relax'), delta=round((avaliacao_atual.get("shoulder1_relax") - avaliacao_anterior.get("shoulder1_relax")),2), delta_color="inverse")
+    col2.metric("Braço esquerdo contraído (cm)",avaliacao_atual.get('shoulder1_contract'), delta=round((avaliacao_atual.get("shoulder1_contract") - avaliacao_anterior.get("shoulder1_contract")),2), delta_color="inverse")
+    col3.metric("Antebraço esquerdo (cm)",avaliacao_atual.get('shoulder1_braquio'), delta=round((avaliacao_atual.get("shoulder1_braquio") - avaliacao_anterior.get("shoulder1_braquio")),2), delta_color="inverse")
+    
     col1.metric("Coxa direita (cm)",avaliacao_atual.get('thigh1'),delta=round((avaliacao_atual.get("thigh1") - avaliacao_anterior.get("thigh1")),2), delta_color="inverse")
     col2.metric("Coxa esquerda (cm)",avaliacao_atual.get('thigh1'),delta=round((avaliacao_atual.get("thigh2") - avaliacao_anterior.get("thigh2")),2), delta_color="inverse")
-    col1.metric("Panturrilha direita (cm)",avaliacao_atual.get('calf1'),delta=round((avaliacao_atual.get("calf1") - avaliacao_anterior.get("calf1")),2), delta_color="inverse")
-    col2.metric("Panturrilha esquerda (cm)",avaliacao_atual.get('calf2'),delta=round((avaliacao_atual.get("calf2") - avaliacao_anterior.get("calf2")),2), delta_color="inverse")
+    col3.metric("Panturrilha direita (cm)",avaliacao_atual.get('calf1'),delta=round((avaliacao_atual.get("calf1") - avaliacao_anterior.get("calf1")),2), delta_color="inverse")
+    col1.metric("Panturrilha esquerda (cm)",avaliacao_atual.get('calf2'),delta=round((avaliacao_atual.get("calf2") - avaliacao_anterior.get("calf2")),2), delta_color="inverse")
 
+    st.divider()
+    st.header('Avaliação de composição corporal')
+    col1,col2,col3 = st.columns(3)
+    st.metric('Protocolo Utilizado', avaliacao_atual.get('protocolo'))
+    if avaliacao_atual.get('protocolo') == 'Pollock 7 dobras':
+        col1.metric('Tricipital (mm)', avaliacao_atual.get('triciptal'))
+        col2.metric('Peitoral (mm)', avaliacao_atual.get('peitoral'))
+        col3.metric('Subescapular (mm)', avaliacao_atual.get('subescapular'))
+        col1.metric('Axilar média (mm)', avaliacao_atual.get('axilar_media'))
+        col2.metric('Suprailiaca (mm)', avaliacao_atual.get('suprailiaca'))
+        col3.metric('Abdominal (mm)', avaliacao_atual.get('abdominal'))
+        col1.metric('Coxa média (mm)', avaliacao_atual.get('coxa_media'))
+
+    if avaliacao_atual.get('protocolo') == 'Pollock 3 dobras':
+        if avaliacao_atual.get('sex') == 'Masculino':
+            col1.metric('Peitoral (mm)', avaliacao_atual.get('peitoral'))
+            col2.metric('Abdominal (mm)', avaliacao_atual.get('abdominal'))
+            col3.metric('Coxa anterior (mm)', avaliacao_atual.get('coxa_anterior'))
+
+        if avaliacao_atual.get('sex') == 'Feminino':
+            col1.metric('Tricipital (mm)', avaliacao_atual.get('triciptal'))
+            col2.metric('Supra-ilíaca (mm)', avaliacao_atual.get('suprailiaca'))
+            col3.metric('Coxa anterior (mm)', avaliacao_atual.get('coxa_anterior'))
+
+    if avaliacao_atual.get('protocolo') == 'Faulkner':
+        col1.metric('Tricipital (mm)', avaliacao_atual.get('triciptal'))
+        col2.metric("Subescapular (mm)", avaliacao_atual.get('subescapular'))
+        col3.metric("Suprailiaca (mm)", avaliacao_atual.get('suprailiaca'))
+        col1.metric("Abdominal (mm)", avaliacao_atual.get('abdominal'))
+
+
+    if avaliacao_atual.get('protocolo') == "Durnin & Womersley":
+        col1.metric("Biceps (mm)", avaliacao_atual.get('biciptal'))
+        col2.metric("Tríceps (mm)", avaliacao_atual.get('triciptal'))
+        col3.metric("Subescapular (mm)", avaliacao_atual.get('subescapular'))
+        col1.metric("Suprailiaca (mm)", avaliacao_atual.get('suprailiaca'))
 
     st.divider()
     st.header('**Avaliações Anteriores**')
@@ -392,23 +678,76 @@ def avaliacao_alunos(student):
         avaliacao = coll2.find_one({"last": avaliacao_selecionado, "student_name": student})
         col1,col2,col3 = st.columns(3)
         col1.metric("Idade", dados_aluno.get("idade"))
-        col2.metric('Peso(KG)', avaliacao.get("peso"))
-        col1.metric('Altura(cm)', dados_aluno.get("altura"))
-        col2.metric("Porcentagem de gordura corporal", avaliacao.get("body_fat"))
+
+        col2.metric('Altura(cm)', dados_aluno.get("altura"))
+        
+        col3.metric('Peso(KG)', avaliacao.get("peso"))
+
+        col1.metric("Quantidade de gordura corporal", f'{round(avaliacao.get("body_fat"),2)} KG')
+        col1.metric("Porcentagem de gordura corporal", f'{round(avaliacao.get("fat_percent"),2)} %')
+        
+        col2.metric("Quantidade de massa magra", f'{round(avaliacao.get("body_muscle"),2)} KG')
+        col2.metric("Porcentagem de massa magra", f'{round(avaliacao.get("muscle_percent"),2)} %')
+
         imc = round((avaliacao.get("peso") / ((dados_aluno.get("altura")/100) * (dados_aluno.get("altura")/100))),2)
         col3.metric("IMC", imc)
+
         st.header('Medidas Corporais')
-        col1,col2,col3 = st.columns(3)
+        col1,col2, col3 = st.columns(3)
         col1.metric("Toráx (cm)",avaliacao.get("chest"))
-        col2.metric("Abdomen (cm)",avaliacao.get('waist'))
+        col2.metric("Abdomen (cm)",avaliacao.get('abdomen'))
         col1.metric("Cintura (cm)",avaliacao.get('waist'))
         col2.metric("Quadril (cm)",avaliacao.get('hip'))
-        col1.metric("Braço direito (cm)",avaliacao.get('shoulder1'))
-        col2.metric("Braço esquerdo (cm)",avaliacao.get('shoulder2'))
+        
+        col1.metric("Braço direito relaxado (cm)",avaliacao.get('shoulder1_relax'))
+        col2.metric("Braço direito contraído (cm)",avaliacao.get('shoulder1_contract'))
+        col3.metric("Antebraço direito (cm)",avaliacao.get('shoulder1_braquio'))
+        
+        col1.metric("Braço esquerdo relaxado (cm)",avaliacao.get('shoulder1_relax'))
+        col2.metric("Braço esquerdo contraído (cm)",avaliacao.get('shoulder1_contract'))
+        col3.metric("Antebraço esquerdo (cm)",avaliacao.get('shoulder1_braquio'))
+        
         col1.metric("Coxa direita (cm)",avaliacao.get('thigh1'))
-        col2.metric("Coxa esquerda (cm)",avaliacao.get('thigh2'))
-        col1.metric("Panturrilha direita (cm)",avaliacao.get('calf1)'))
-        col2.metric("Panturrilha esquerda (cm)",avaliacao.get('calf2'))
+        col2.metric("Coxa esquerda (cm)",avaliacao.get('thigh1'))
+        col3.metric("Panturrilha direita (cm)",avaliacao.get('calf1'))
+        col1.metric("Panturrilha esquerda (cm)",avaliacao.get('calf2'))
+
+        st.divider()
+        st.header('Avaliação de composição corporal')
+        col1,col2,col3 = st.columns(3)
+        st.metric('Protocolo Utilizado', avaliacao.get('protocolo'))
+        if avaliacao.get('protocolo') == 'Pollock 7 dobras':
+            col1.metric('Tricipital (mm)', avaliacao.get('triciptal'))
+            col2.metric('Peitoral (mm)', avaliacao.get('peitoral'))
+            col3.metric('Subescapular (mm)', avaliacao.get('subescapular'))
+            col1.metric('Axilar média (mm)', avaliacao.get('axilar_media'))
+            col2.metric('Suprailiaca (mm)', avaliacao.get('suprailiaca'))
+            col3.metric('Abdominal (mm)', avaliacao.get('abdominal'))
+            col1.metric('Coxa média (mm)', avaliacao.get('coxa_media'))
+
+        if avaliacao.get('protocolo') == 'Pollock 3 dobras':
+            if avaliacao.get('sex') == 'Masculino':
+                col1.metric('Peitoral (mm)', avaliacao.get('peitoral'))
+                col2.metric('Abdominal (mm)', avaliacao.get('abdominal'))
+                col3.metric('Coxa anterior (mm)', avaliacao.get('coxa_anterior'))
+
+            if avaliacao.get('sex') == 'Feminino':
+                col1.metric('Tricipital (mm)', avaliacao.get('triciptal'))
+                col2.metric('Supra-ilíaca (mm)', avaliacao.get('suprailiaca'))
+                col3.metric('Coxa anterior (mm)', avaliacao.get('coxa_anterior'))
+
+        if avaliacao.get('protocolo') == 'Faulkner':
+            col1.metric('Tricipital (mm)', avaliacao.get('triciptal'))
+            col2.metric("Subescapular (mm)", avaliacao.get('subescapular'))
+            col3.metric("Suprailiaca (mm)", avaliacao.get('suprailiaca'))
+            col1.metric("Abdominal (mm)", avaliacao.get('abdominal'))
+
+
+        if avaliacao.get('protocolo') == "Durnin & Womersley":
+            col1.metric("Biceps (mm)", avaliacao.get('biciptal'))
+            col2.metric("Tríceps (mm)", avaliacao.get('triciptal'))
+            col3.metric("Subescapular (mm)", avaliacao.get('subescapular'))
+            col1.metric("Suprailiaca (mm)", avaliacao.get('suprailiaca'))
     
 def treinos_alunos(student):
     user = coll3.find({"student": student})
@@ -561,3 +900,96 @@ def pag_arquivos(professor):
             )
             
             st.success('Arquivo carregado com sucesso')
+
+def extrair_tags_feedback(mensagem: str) -> list:
+    llm = ChatOpenAI(model="gpt-3.5-turbo",api_key=st.secrets["OPENAI_API_KEY"],temperature=0)
+    prompt = ChatPromptTemplate.from_template(
+        """
+        Sua tarefa é extrair palavras-chave relevantes de um feedback de aluno sobre treino.
+        Retorne no máximo 5 palavras em uma lista Python, focando em:
+        - Sintomas relatados (ex: dor, cansaço)
+        - Exercícios mencionados (ex: agachamento, supino)
+        - Áreas do corpo (ex: ombro, lombar)
+        - Qualquer termo técnico relevante
+
+        Feedback do aluno:
+        "{mensagem}"
+
+        Responda apenas com uma lista Python válida. Exemplo: ["ombro", "supino", "dor"]
+        """
+    )
+    
+    messages = prompt.format_messages(mensagem=mensagem)
+    resposta = llm(messages)
+    
+    # Garante que a resposta seja interpretada como lista
+    try:
+        tags = eval(resposta.content.strip())
+        if isinstance(tags, list):
+            return tags
+    except Exception:
+        pass
+
+    return []
+
+def feedback(student):
+    user = coll1.find({"student_name": student})
+    nome_aluno = [aluno for aluno in user]
+
+    st.divider()
+
+    usuario = nome_aluno[0]['student_name']
+    esforco = {"0": 'Extremamente Leve',
+               "1": 'Muito Leve',
+               "2": 'Leve',
+               "3": 'Moderadamente Leve',
+               "4": 'Pouco pesado',
+               "5": 'Pesado',
+               "6": 'Pesado',
+               "7": 'Muito pesado',
+               "8": 'Muito pesado',
+               "9": 'Extremamente pesado',
+               "10": 'Extremamente pesado'}
+    
+    list_esforco = []
+    for grau in esforco:
+        list_esforco.append(grau)
+    
+    grau_esforco = st.selectbox('Percepção do esforço', list_esforco)
+    st.markdown(f'**{esforco[grau_esforco]}**')
+    
+    recover = {"0": 'Nenhuma recuperação',
+               "1": 'Muito pouca recuperação',
+               "2": 'Pouca recuperação',
+               "3": 'Recuperação moderada',
+               "4": 'Boa recuperação',
+               "5": 'Muito boa recuperação',
+               "6": 'Muito boa recuperação',
+               "7": 'Muito, muito boa recuperação',
+               "8": 'Muito, muito boa recuperação',
+               "9": 'Muito, muito boa recuperação',
+               "10": 'Totalmente recuperado'}
+    
+    list_recover = []
+    for level in recover:
+        list_recover.append(level)
+    
+    grau_recover = st.selectbox('Percepção de repouso', list_recover)
+    st.markdown(f'**{recover[grau_recover]}**')
+    
+    message = st.text_input('Mensagem')
+    ref = st.text_input('Referência', placeholder='Sobre qual treino você está falando?')
+
+    feedback = {
+        "student": usuario,
+        "data": datetime.utcnow().date(),
+        "esforco": esforco[grau_esforco],
+        "recover": recover[grau_recover],
+        "message": message,
+        "tags" : extrair_tags_feedback(message),
+        "ref": ref
+    }
+
+    if st.button('Enviar feedback'):
+        coll6.insert_one(feedback)
+        st.success('Feedback enviado com sucesso')
