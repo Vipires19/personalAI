@@ -5,7 +5,7 @@ import urllib.parse
 from datetime import datetime
 import tempfile
 from utils.r2_utils import get_r2_client
-from utils.fomularios import forms_aluno,editar_aluno,avaliacao,visualizar_aluno,dash_prof,avaliacao_alunos,treinos_alunos,dash_aluno,treino_manual,pag_arquivos
+from utils.fomularios import forms_aluno,editar_aluno,avaliacao,visualizar_aluno,dash_prof,avaliacao_alunos,treinos_alunos,dash_aluno,treino_manual,pag_arquivos,feedback
 import uuid
 from services.chat_professor import AgentChat
 from langchain_core.prompts.chat import AIMessage
@@ -73,54 +73,50 @@ authenticator = stauth.Authenticate(credentials, 'cookie', 'key123', cookie_expi
 authenticator.login()
 
 def analise_exec(student_name):
-
     student_name = student_name
-    with st.expander("📤 Upload dos Vídeos"):
-        ref_video = st.file_uploader("Vídeo de Referência", type=["mp4"])
-        exec_video = st.file_uploader("Vídeo de Execução", type=["mp4"])
 
-    if ref_video and exec_video and student_name:
+    with st.expander("📤 Upload do Vídeo"):
+        exec_video = st.file_uploader("🎥 Vídeo de Execução", type=["mp4"])
+        exercise = st.selectbox(
+            "🏋️‍♂️ Qual exercício está sendo analisado?",
+            ["agachamento_livre", "stiff", "supino_reto", "remada_curvada", "desenvolvimento"]
+        )
 
+    if exec_video and student_name and exercise:
         if st.button("🚀 Enviar para Análise"):
             with st.spinner("Enviando arquivos..."):
-                ref_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
                 exec_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-                ref_temp.write(ref_video.read())
                 exec_temp.write(exec_video.read())
 
-                # Upload para o R2
-                ref_filename = f"{uuid.uuid4()}_ref.mp4"
                 exec_filename = f"{uuid.uuid4()}_exec.mp4"
-                
-                r2.upload_file(Filename=ref_temp.name, Bucket=BUCKET_NAME, Key=ref_filename)
-                r2.upload_file(Filename=exec_temp.name, Bucket=BUCKET_NAME, Key=exec_filename)
-                
-                ref_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{ref_filename}"
+
+                # Upload para R2
+                r2.upload_file(
+                    Filename=exec_temp.name,
+                    Bucket=BUCKET_NAME,
+                    Key=exec_filename
+                )
+
                 exec_url = f"https://{BUCKET_NAME}.r2.cloudflarestorage.com/{exec_filename}"
 
                 job_data = {
                     "user": st.session_state['username'],
                     "student": student_name,
+                    "exercise": exercise,
+                    "video_path": exec_url,
                     "status": "pending",
-                    "created_at": datetime.utcnow(),
-                    "ref_path": ref_url,
-                    "exec_path": exec_url
+                    "created_at": datetime.utcnow()
                 }
 
-                # Grava no MongoDB
                 result = coll_jobs.insert_one(job_data)
                 st.success(f"✅ Enviado para análise. ID do job: {result.inserted_id}")
-                #job_id = coll_jobs.insert_one(job_data).inserted_id
-                #st.success("✅ Enviado para análise. Verifique abaixo o status.")
 
     st.divider()
     st.subheader("📊 Minhas Análises")
     jobs = coll_jobs.find({"user": st.session_state['username']}).sort("created_at", -1)
-    
+
     for job in jobs:
         created_at = job.get("created_at")
-    
-        # Garante que 'created_at' seja um datetime para usar strftime
         if isinstance(created_at, str):
             try:
                 created_at = datetime.fromisoformat(created_at)
@@ -129,34 +125,34 @@ def analise_exec(student_name):
                     created_at = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%S.%f")
                 except Exception:
                     created_at = None
-    
+
         date_str = created_at.strftime('%d/%m/%Y %H:%M') if created_at else "Data inválida"
-    
-        with st.expander(f"📌 {job['student']} - {date_str}"):
+
+        with st.expander(f"📌 {job['student']} - {job.get('exercise', 'Exercício não informado')} - {date_str}"):
             st.write(f"**Status:** {job['status'].capitalize()}")
-    
+
             if job['status'] == "done":
-                if 'video_url' in job:
-                    st.video(f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}")
-                    st.download_button(
-                        "📥 Baixar Vídeo",
-                        f"{BUCKET_PUBLIC_URL_2}/{job['video_url']}",
-                        file_name=f"{job['student']}_comparativo.mp4"
-                    )
-    
                 if 'report_url' in job:
                     st.download_button(
-                        "📄 Baixar PDF",
+                        "📄 Baixar Relatório PDF",
                         f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}",
-                        file_name=f"{BUCKET_PUBLIC_URL_2}/{job['report_url']}"
+                        file_name=f"{job['student']}_{job.get('exercise', '')}_relatorio.pdf"
                     )
-    
+
                 if 'feedback' in job:
                     st.markdown("📋 Feedback Inteligente")
                     st.write(job['feedback'])
-    
+
+                if 'medias' in job:
+                    st.markdown("📐 Médias dos Ângulos")
+                    st.json(job['medias'])
+
+                if 'status_por_articulacao' in job:
+                    st.markdown("📊 Status por Articulação")
+                    st.json(job['status_por_articulacao'])
+
             elif job['status'] == "error":
-                st.error("Erro na análise. Tente novamente.")
+                st.error("❌ Erro na análise. Tente novamente.")
 
 def agent_memory(agent_model, input: str, thread_id: str, date : str = None):
     try:
@@ -232,14 +228,14 @@ def show_student_dashboard():
 
         st.divider()
 
-        if st.button("💪 Seus treinos"):
-            st.session_state["pagina_atual"] = "treinos"
+        #if st.button("💪 Seus treinos"):
+        #    st.session_state["pagina_atual"] = "treinos"
 
         if st.button("📈 Suas avaliações"):
             st.session_state["pagina_atual"] = "avaliacao"
 
-        if st.button("🏋️ Análise de Exercícios com IA"):
-            st.session_state["pagina_atual"] = "analise"
+        if st.button("🔁 FEEDBACKS"):
+            st.session_state["pagina_atual"] = "feedback"
 
         if st.button("🏠 Voltar ao início"):
             st.session_state["pagina_atual"] = "home"
@@ -249,23 +245,19 @@ def show_student_dashboard():
         st.title("🏋️ Hub AtlaAI 🌎")
         st.image("assets/logo.png", width=200)
         st.header(f"Bem-vindo, {st.session_state['name']}")
-
-    if st.session_state["pagina_atual"] == "analise":
-        st.title("🏋️ Análise de Exercícios com IA")
-        st.image("assets/logo.png", width=200)
-        student_name = st.session_state['name']
-        analise_exec(student_name)
+        dash_aluno(st.session_state['name'])
 
     elif st.session_state["pagina_atual"] == "avaliacao":
         st.title("📈 Suas Avaliações Físicas")
         avaliacao_alunos(st.session_state['name'])
 
-    elif st.session_state["pagina_atual"] == "treinos":
-        st.title("💪 Seus treinos")
-        treinos_alunos(st.session_state['name'])
+    elif st.session_state["pagina_atual"] == "feedback":
+        st.title("🔁 FEEDBACKS")
+        st.header(f'Olá, {st.session_state["name"]}!')
+        st.markdown('Deixe seu feedback em relação ao treino realizado')
+        feedback(st.session_state['name'])
 
     elif st.session_state["pagina_atual"] == "home":
-        dash_aluno(st.session_state['name'])
         st.info("Selecione uma opção no menu lateral para começar.")
 
 def show_personal_dashboard():
@@ -291,12 +283,6 @@ def show_personal_dashboard():
 
         if st.button("📈 Fazer Avaliação do aluno"):
             st.session_state["pagina_atual"] = "avaliacao"
-
-        if st.button("💪 Monte o treino"):
-            st.session_state["pagina_atual"] = "treinos"
-
-        if st.button("🏋️ Análise de Exercícios com IA"):
-            st.session_state["pagina_atual"] = "analise"
 
         if st.button("🤖🏃‍♂️‍➡️ Agent treinador"):
             st.session_state["pagina_atual"] = "agent"
@@ -325,12 +311,6 @@ def show_personal_dashboard():
         st.title("✏️ Editar dados de aluno")
         editar_aluno(st.session_state['name'])
 
-    if st.session_state["pagina_atual"] == "analise":
-        st.title("🏋️ Análise de Exercícios com IA")
-        st.image("assets/logo.png", width=200)
-        student_name = st.text_input("Nome do aluno")
-        analise_exec(student_name)
-
     elif st.session_state["pagina_atual"] == "avaliacao":
         st.title("📈 Fazer Avaliação do aluno")
         avaliacao(st.session_state['name'])
@@ -338,10 +318,6 @@ def show_personal_dashboard():
     elif st.session_state["pagina_atual"] == "agent":
         st.title("🤖 Agente IA Treinador")
         run_agent_interface()
-
-    elif st.session_state["pagina_atual"] == "treinos":
-        st.title("💪 Monte o treino")
-        treino_manual(st.session_state['name'])
 
     elif st.session_state["pagina_atual"] == "uploader":
         st.title("🗃️ Ajude o Atlas à aprender")
