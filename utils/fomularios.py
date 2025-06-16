@@ -982,7 +982,7 @@ def feedback(student):
 
     feedback = {
         "student": usuario,
-        "data": datetime.utcnow().date(),
+        "data": datetime.utcnow(),
         "esforco": esforco[grau_esforco],
         "recover": recover[grau_recover],
         "message": message,
